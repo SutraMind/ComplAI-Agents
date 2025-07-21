@@ -303,6 +303,99 @@ class STMProcessor:
         
         return stats
     
+    def get_related_ltm_rules(self, scenario_id: str) -> List[str]:
+        """
+        Get LTM rule IDs that were derived from this STM entry.
+        
+        This method provides traceability from STM to LTM by finding
+        rules that reference this scenario_id as a source.
+        
+        Args:
+            scenario_id: Scenario identifier
+            
+        Returns:
+            List of LTM rule IDs that reference this scenario
+        """
+        # Store related rule IDs in Redis for fast lookup
+        key = f"stm_ltm_links:{scenario_id}"
+        rule_ids = self.redis_client.smembers(key)
+        return list(rule_ids) if rule_ids else []
+    
+    def add_ltm_rule_link(self, scenario_id: str, rule_id: str) -> bool:
+        """
+        Add a link from STM entry to an LTM rule.
+        
+        This creates bidirectional traceability between STM and LTM.
+        
+        Args:
+            scenario_id: STM scenario identifier
+            rule_id: LTM rule identifier
+            
+        Returns:
+            True if link was added successfully
+        """
+        if not self.get_entry(scenario_id):
+            self.logger.error(f"STM entry {scenario_id} not found")
+            return False
+        
+        key = f"stm_ltm_links:{scenario_id}"
+        result = self.redis_client.sadd(key, rule_id)
+        
+        # Set TTL to match STM entry TTL
+        self.redis_client.expire(key, timedelta(hours=24))
+        
+        if result:
+            self.logger.info(f"Added LTM rule link: {scenario_id} -> {rule_id}")
+            return True
+        return False
+    
+    def remove_ltm_rule_link(self, scenario_id: str, rule_id: str) -> bool:
+        """
+        Remove a link from STM entry to an LTM rule.
+        
+        Args:
+            scenario_id: STM scenario identifier
+            rule_id: LTM rule identifier
+            
+        Returns:
+            True if link was removed successfully
+        """
+        key = f"stm_ltm_links:{scenario_id}"
+        result = self.redis_client.srem(key, rule_id)
+        
+        if result:
+            self.logger.info(f"Removed LTM rule link: {scenario_id} -> {rule_id}")
+            return True
+        return False
+    
+    def get_traceability_info(self, scenario_id: str) -> Dict[str, Any]:
+        """
+        Get complete traceability information for an STM entry.
+        
+        This provides a comprehensive view of how this STM entry
+        relates to LTM rules and other system components.
+        
+        Args:
+            scenario_id: Scenario identifier
+            
+        Returns:
+            Dictionary containing traceability information
+        """
+        entry = self.get_entry(scenario_id)
+        if not entry:
+            return {}
+        
+        related_rules = self.get_related_ltm_rules(scenario_id)
+        
+        return {
+            'stm_entry': entry.to_dict(),
+            'related_ltm_rules': related_rules,
+            'has_human_feedback': entry.human_feedback is not None,
+            'final_status': entry.final_status,
+            'created_at': entry.created_at.isoformat() if entry.created_at else None,
+            'updated_at': entry.updated_at.isoformat() if entry.updated_at else None
+        }
+    
     def cleanup_expired(self) -> int:
         """
         Clean up any expired entries (Redis handles this automatically, but this is for manual cleanup).
