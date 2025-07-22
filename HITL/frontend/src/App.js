@@ -160,6 +160,77 @@ function App() {
         }
     };
 
+    const handleCommentEdit = async (commentId, newText) => {
+        try {
+            const response = await apiService.updateComment(commentId, newText);
+            setComments(prev => prev.map(c => 
+                c.id === commentId ? { ...c, comment_text: newText } : c
+            ));
+            toast.success('Comment updated successfully!');
+        } catch (err) {
+            console.error('Error updating comment:', err);
+            toast.error('Failed to update comment');
+        }
+    };
+
+    const handleSaveComments = async () => {
+        try {
+            if (!currentReport || comments.length === 0) {
+                toast.warning('No report or comments to save');
+                return;
+            }
+
+            // Create feedback content
+            let feedbackContent = `FEEDBACK REPORT\n`;
+            feedbackContent += `================\n\n`;
+            feedbackContent += `Report: ${currentReport.filename}\n`;
+            feedbackContent += `Generated: ${new Date().toLocaleString()}\n`;
+            feedbackContent += `Total Comments: ${comments.length}\n\n`;
+            
+            feedbackContent += `ORIGINAL REPORT CONTENT\n`;
+            feedbackContent += `=======================\n\n`;
+            feedbackContent += currentReport.content + '\n\n';
+            
+            feedbackContent += `EXPERT COMMENTS\n`;
+            feedbackContent += `===============\n\n`;
+            
+            // Sort comments by position
+            const sortedComments = [...comments].sort((a, b) => {
+                const aPos = a.text_selection?.start_position || 0;
+                const bPos = b.text_selection?.start_position || 0;
+                return aPos - bPos;
+            });
+
+            sortedComments.forEach((comment, index) => {
+                feedbackContent += `Comment ${index + 1}:\n`;
+                feedbackContent += `Author: ${comment.author}\n`;
+                feedbackContent += `Time: ${new Date(comment.timestamp).toLocaleString()}\n`;
+                feedbackContent += `Selected Text: "${comment.text_selection?.selected_text || 'N/A'}"\n`;
+                feedbackContent += `Comment: ${comment.comment_text}\n`;
+                if (comment.section_context) {
+                    feedbackContent += `Section: ${comment.section_context}\n`;
+                }
+                feedbackContent += `\n${'='.repeat(50)}\n\n`;
+            });
+
+            // Create and download the file
+            const blob = new Blob([feedbackContent], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `feedback_${currentReport.filename.replace(/\.[^/.]+$/, '')}_${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+
+            toast.success('Feedback file saved successfully!');
+        } catch (err) {
+            console.error('Error saving feedback:', err);
+            toast.error('Failed to save feedback file');
+        }
+    };
+
     const handleGenerateSummary = () => {
         if (comments.length === 0) {
             toast.warning('No comments to summarize. Add some comments first.');
@@ -313,6 +384,8 @@ function App() {
                                 <CommentsSidebar
                                     comments={comments}
                                     onCommentDelete={handleCommentDelete}
+                                    onCommentEdit={handleCommentEdit}
+                                    onSaveComments={handleSaveComments}
                                     reportTitle={selectedReportData?.filename}
                                 />
                             </motion.div>

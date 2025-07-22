@@ -5,10 +5,8 @@ import {
   Box,
   List,
   ListItem,
-  ListItemText,
   IconButton,
   Chip,
-  Divider,
   Button,
   Dialog,
   DialogTitle,
@@ -23,15 +21,13 @@ import {
   Comment as CommentIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
-  Person as PersonIcon,
   Schedule as TimeIcon,
-  FormatQuote as QuoteIcon,
   Clear as ClearIcon,
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 
-const CommentsSidebar = ({ comments, onCommentDelete, reportTitle }) => {
+const CommentsSidebar = ({ comments, onCommentDelete, onCommentEdit, reportTitle, onSaveComments }) => {
   const [editingComment, setEditingComment] = useState(null);
   const [editText, setEditText] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -48,9 +44,23 @@ const CommentsSidebar = ({ comments, onCommentDelete, reportTitle }) => {
   };
 
   const handleEditSave = async () => {
-    // TODO: Implement edit functionality
-    toast.info('Edit functionality coming soon!');
-    handleEditCancel();
+    try {
+      if (!editText.trim()) {
+        toast.error('Comment text cannot be empty');
+        return;
+      }
+
+      // Call the onCommentEdit prop if provided
+      if (onCommentEdit) {
+        await onCommentEdit(editingComment, editText.trim());
+        toast.success('Comment updated successfully!');
+      }
+      
+      handleEditCancel();
+    } catch (err) {
+      console.error('Error updating comment:', err);
+      toast.error('Failed to update comment');
+    }
   };
 
   const handleDeleteClick = (comment) => {
@@ -138,7 +148,7 @@ const CommentsSidebar = ({ comments, onCommentDelete, reportTitle }) => {
           </Typography>
         )}
         
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
           <Chip 
             label={`${comments.length} total`} 
             size="small" 
@@ -146,15 +156,25 @@ const CommentsSidebar = ({ comments, onCommentDelete, reportTitle }) => {
             variant="outlined"
           />
           {comments.length > 0 && (
-            <Tooltip title="Clear all comments">
-              <IconButton 
-                size="small" 
-                color="error"
-                onClick={() => toast.info('Clear all functionality coming soon!')}
+            <>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={onSaveComments}
+                sx={{ minWidth: 'auto', px: 2 }}
               >
-                <ClearIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+                Save Feedback
+              </Button>
+              <Tooltip title="Clear all comments">
+                <IconButton 
+                  size="small" 
+                  color="error"
+                  onClick={() => toast.info('Clear all functionality coming soon!')}
+                >
+                  <ClearIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
           )}
         </Box>
       </Box>
@@ -249,40 +269,7 @@ const CommentsSidebar = ({ comments, onCommentDelete, reportTitle }) => {
                       </Box>
                     </Box>
 
-                    {/* Selected Text */}
-                    <Box 
-                      sx={{ 
-                        bgcolor: 'primary.50',
-                        border: '1px solid',
-                        borderColor: 'primary.200',
-                        borderRadius: 2,
-                        p: 2,
-                        mb: 2,
-                        position: 'relative',
-                      }}
-                    >
-                      <QuoteIcon 
-                        sx={{ 
-                          position: 'absolute',
-                          top: 8,
-                          left: 8,
-                          fontSize: 16,
-                          color: 'primary.main',
-                          opacity: 0.6,
-                        }} 
-                      />
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontStyle: 'italic',
-                          color: 'primary.dark',
-                          pl: 3,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        "{comment.text_selection?.selected_text || 'No text selected'}"
-                      </Typography>
-                    </Box>
+
 
                     {/* Comment Text */}
                     {editingComment === comment.id ? (
@@ -296,6 +283,7 @@ const CommentsSidebar = ({ comments, onCommentDelete, reportTitle }) => {
                           variant="outlined"
                           size="small"
                           sx={{ mb: 2 }}
+                          autoFocus
                         />
                         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
                           <Button size="small" onClick={handleEditCancel}>
@@ -305,6 +293,7 @@ const CommentsSidebar = ({ comments, onCommentDelete, reportTitle }) => {
                             size="small" 
                             variant="contained" 
                             onClick={handleEditSave}
+                            disabled={!editText.trim()}
                           >
                             Save
                           </Button>

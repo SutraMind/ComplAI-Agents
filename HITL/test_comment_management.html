@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Comment Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .comment-item {
+            border: 1px solid #eee;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+        textarea {
+            width: 100%;
+            height: 60px;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Comment Management Test</h1>
+    
+    <div class="test-section">
+        <h2>1. Load Comments</h2>
+        <button onclick="loadComments()">Load Comments</button>
+        <div id="comments-list"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. Edit Comment</h2>
+        <input type="text" id="edit-comment-id" placeholder="Comment ID">
+        <textarea id="edit-comment-text" placeholder="New comment text"></textarea>
+        <button onclick="editComment()">Update Comment</button>
+        <div id="edit-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. Delete Comment</h2>
+        <input type="text" id="delete-comment-id" placeholder="Comment ID">
+        <button onclick="deleteComment()">Delete Comment</button>
+        <div id="delete-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. Save Feedback</h2>
+        <button onclick="saveFeedback()">Save Feedback File</button>
+        <div id="save-result"></div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        
+        async function loadComments() {
+            try {
+                const response = await fetch(`${API_BASE}/reports/sample_report/comments`);
+                const data = await response.json();
+                
+                const commentsDiv = document.getElementById('comments-list');
+                if (data.success && data.data.length > 0) {
+                    commentsDiv.innerHTML = '<h3>Comments:</h3>';
+                    data.data.forEach(comment => {
+                        commentsDiv.innerHTML += `
+                            <div class="comment-item">
+                                <strong>ID:</strong> ${comment.id}<br>
+                                <strong>Author:</strong> ${comment.author}<br>
+                                <strong>Text:</strong> ${comment.comment_text}<br>
+                                <strong>Selected:</strong> "${comment.text_selection?.selected_text || 'N/A'}"
+                            </div>
+                        `;
+                    });
+                } else {
+                    commentsDiv.innerHTML = '<p>No comments found</p>';
+                }
+            } catch (error) {
+                document.getElementById('comments-list').innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function editComment() {
+            const commentId = document.getElementById('edit-comment-id').value;
+            const newText = document.getElementById('edit-comment-text').value;
+            const resultDiv = document.getElementById('edit-result');
+            
+            if (!commentId || !newText) {
+                resultDiv.innerHTML = '<p class="error">Please provide both comment ID and new text</p>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/comments/${commentId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        comment_text: newText
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = '<p class="success">Comment updated successfully!</p>';
+                    loadComments(); // Refresh the comments list
+                } else {
+                    resultDiv.innerHTML = `<p class="error">Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function deleteComment() {
+            const commentId = document.getElementById('delete-comment-id').value;
+            const resultDiv = document.getElementById('delete-result');
+            
+            if (!commentId) {
+                resultDiv.innerHTML = '<p class="error">Please provide comment ID</p>';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/comments/${commentId}`, {
+                    method: 'DELETE'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = '<p class="success">Comment deleted successfully!</p>';
+                    loadComments(); // Refresh the comments list
+                } else {
+                    resultDiv.innerHTML = `<p class="error">Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function saveFeedback() {
+            const resultDiv = document.getElementById('save-result');
+            
+            try {
+                // Get report content
+                const reportResponse = await fetch(`${API_BASE}/reports/sample_report`);
+                const reportData = await reportResponse.json();
+                
+                // Get comments
+                const commentsResponse = await fetch(`${API_BASE}/reports/sample_report/comments`);
+                const commentsData = await commentsResponse.json();
+                
+                if (reportData.success && commentsData.success) {
+                    const report = reportData.data;
+                    const comments = commentsData.data;
+                    
+                    // Create feedback content
+                    let feedbackContent = `FEEDBACK REPORT\n`;
+                    feedbackContent += `================\n\n`;
+                    feedbackContent += `Report: ${report.filename}\n`;
+                    feedbackContent += `Generated: ${new Date().toLocaleString()}\n`;
+                    feedbackContent += `Total Comments: ${comments.length}\n\n`;
+                    
+                    feedbackContent += `ORIGINAL REPORT CONTENT\n`;
+                    feedbackContent += `=======================\n\n`;
+                    feedbackContent += report.content + '\n\n';
+                    
+                    feedbackContent += `EXPERT COMMENTS\n`;
+                    feedbackContent += `===============\n\n`;
+                    
+                    // Sort comments by position
+                    const sortedComments = comments.sort((a, b) => {
+                        const aPos = a.text_selection?.start_position || 0;
+                        const bPos = b.text_selection?.start_position || 0;
+                        return aPos - bPos;
+                    });
+
+                    sortedComments.forEach((comment, index) => {
+                        feedbackContent += `Comment ${index + 1}:\n`;
+                        feedbackContent += `Author: ${comment.author}\n`;
+                        feedbackContent += `Time: ${new Date(comment.timestamp).toLocaleString()}\n`;
+                        feedbackContent += `Selected Text: "${comment.text_selection?.selected_text || 'N/A'}"\n`;
+                        feedbackContent += `Comment: ${comment.comment_text}\n`;
+                        if (comment.section_context) {
+                            feedbackContent += `Section: ${comment.section_context}\n`;
+                        }
+                        feedbackContent += `\n${'='.repeat(50)}\n\n`;
+                    });
+
+                    // Create and download the file
+                    const blob = new Blob([feedbackContent], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `feedback_${report.filename.replace(/\.[^/.]+$/, '')}_${new Date().toISOString().split('T')[0]}.txt`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+
+                    resultDiv.innerHTML = '<p class="success">Feedback file saved successfully!</p>';
+                } else {
+                    resultDiv.innerHTML = '<p class="error">Failed to load report or comments data</p>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+        
+        // Load comments on page load
+        window.onload = loadComments;
+    </script>
+</body>
+</html>

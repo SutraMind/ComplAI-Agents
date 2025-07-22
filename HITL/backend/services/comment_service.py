@@ -3,6 +3,7 @@ Comment service for managing comment operations in the HITL Report Editor.
 """
 
 import uuid
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -11,6 +12,9 @@ from flask import current_app
 from ..models.comment import Comment, TextSelection
 from ..utils.file_operations import FileOperations
 from ..utils.security import SecurityValidator
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 
 class CommentService:
@@ -87,8 +91,17 @@ class CommentService:
             
             return comment
             
+        except ValueError as e:
+            logger.error(f"Validation error creating comment: {str(e)}")
+            current_app.logger.error(f"Validation error creating comment: {str(e)}")
+            return None
+        except RuntimeError as e:
+            logger.error(f"Runtime error creating comment: {str(e)}")
+            current_app.logger.error(f"Runtime error creating comment: {str(e)}")
+            return None
         except Exception as e:
-            current_app.logger.error(f"Error creating comment: {str(e)}")
+            logger.error(f"Unexpected error creating comment: {str(e)}")
+            current_app.logger.error(f"Unexpected error creating comment: {str(e)}")
             return None
     
     def get_comment(self, comment_id: str) -> Optional[Comment]:
@@ -120,8 +133,17 @@ class CommentService:
             
             return comment
             
+        except ValueError as e:
+            logger.error(f"Validation error retrieving comment {comment_id}: {str(e)}")
+            current_app.logger.error(f"Validation error retrieving comment {comment_id}: {str(e)}")
+            return None
+        except FileNotFoundError as e:
+            logger.warning(f"Comment file not found {comment_id}: {str(e)}")
+            current_app.logger.warning(f"Comment file not found {comment_id}: {str(e)}")
+            return None
         except Exception as e:
-            current_app.logger.error(f"Error retrieving comment {comment_id}: {str(e)}")
+            logger.error(f"Unexpected error retrieving comment {comment_id}: {str(e)}")
+            current_app.logger.error(f"Unexpected error retrieving comment {comment_id}: {str(e)}")
             return None
     
     def update_comment(self, comment_id: str, comment_text: str) -> Optional[Comment]:
