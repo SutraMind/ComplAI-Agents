@@ -18,9 +18,9 @@ def create_app(config_name=None):
     app.config.from_object(config[config_name])
     config[config_name].init_app(app)
     
-    # Register blueprints (will be added in later tasks)
-    # from .api import api_bp
-    # app.register_blueprint(api_bp, url_prefix='/api')
+    # Register blueprints
+    from .api import api_bp
+    app.register_blueprint(api_bp, url_prefix='/api')
     
     # Main route to serve the frontend
     @app.route('/')
