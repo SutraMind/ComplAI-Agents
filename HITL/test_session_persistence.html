@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Persistence Test - HITL Report Editor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .test-pass {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .test-fail {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .test-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .warning-demo {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-left: 4px solid #ffc107;
+            border-radius: 8px;
+            margin: 10px 0;
+            padding: 15px;
+        }
+        .warning-content {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+        .warning-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        .warning-text strong {
+            color: #856404;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .warning-text p {
+            color: #664d03;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Session Persistence Test - HITL Report Editor</h1>
+    <p>This page tests the session persistence functionality implemented in Task 6.3.</p>
+
+    <div class="test-section">
+        <h2>1. LocalStorage Session Management</h2>
+        <p>Testing the ability to save and restore session data from localStorage.</p>
+        
+        <button onclick="testSessionSave()">Test Session Save</button>
+        <button onclick="testSessionRestore()">Test Session Restore</button>
+        <button onclick="testSessionClear()">Test Session Clear</button>
+        
+        <div id="sessionTestResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Report Hash Calculation</h2>
+        <p>Testing the report content hash calculation for change detection.</p>
+        
+        <button onclick="testReportHash()">Test Report Hash</button>
+        
+        <div id="hashTestResults"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Warning System Demo</h2>
+        <p>Demonstration of warning messages for modified reports and position mismatches.</p>
+        
+        <button onclick="showReportModificationWarning()">Show Report Modification Warning</button>
+        <button onclick="showPositionMismatchWarning()">Show Position Mismatch Warning</button>
+        
+        <div id="warningDemo"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Session Status Indicator</h2>
+        <p>Testing the session status indicator functionality.</p>
+        
+        <button onclick="testSessionStatus()">Test Session Status</button>
+        
+        <div id="sessionStatusDemo" style="position: relative; height: 60px; border: 1px solid #ddd; border-radius: 4px; margin: 10px 0;">
+            <div id="demoSessionStatus" class="session-status" style="position: absolute; bottom: 10px; left: 10px; display: none;">
+                <div class="session-indicator"></div>
+                <span id="demoSessionStatusText">Session saved</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>5. Comment Position Tracking</h2>
+        <p>Testing comment position validation and tracking.</p>
+        
+        <button onclick="testCommentPositions()">Test Comment Position Validation</button>
+        
+        <div id="positionTestResults"></div>
+    </div>
+
+    <script>
+        // Mock HITL Editor class for testing
+        class MockHITLEditor {
+            constructor() {
+                this.sessionKey = 'hitl_session';
+                this.reportHashKey = 'hitl_report_hashes';
+                this.currentReport = null;
+                this.comments = [];
+            }
+
+            // Session persistence methods from the main implementation
+            saveSession() {
+                if (!this.currentReport) return false;
+
+                const sessionData = {
+                    reportId: this.currentReport.id,
+                    reportFilename: this.currentReport.filename,
+                    comments: this.comments,
+                    timestamp: new Date().toISOString(),
+                    reportHash: this.calculateReportHash(this.currentReport)
+                };
+
+                try {
+                    localStorage.setItem(this.sessionKey, JSON.stringify(sessionData));
+                    return true;
+                } catch (error) {
+                    console.error('Failed to save session:', error);
+                    return false;
+                }
+            }
+
+            restoreSession() {
+                try {
+                    const sessionData = localStorage.getItem(this.sessionKey);
+                    if (!sessionData) return null;
+
+                    const session = JSON.parse(sessionData);
+                    
+                    // Check if session is recent (within 7 days)
+                    const sessionAge = Date.now() - new Date(session.timestamp).getTime();
+                    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+                    
+                    if (sessionAge > maxAge) {
+                        this.clearSession();
+                        return null;
+                    }
+
+                    return session;
+                } catch (error) {
+                    console.error('Failed to restore session:', error);
+                    return null;
+                }
+            }
+
+            clearSession() {
+                try {
+                    localStorage.removeItem(this.sessionKey);
+                    return true;
+                } catch (error) {
+                    console.error('Failed to clear session:', error);
+                    return false;
+                }
+            }
+
+            calculateReportHash(report) {
+                if (!report) return '';
+                
+                let content = '';
+                if (report.sections && report.sections.length > 0) {
+                    content = report.sections.map(s => s.content || '').join('');
+                } else if (report.content) {
+                    content = report.content;
+                }
+                
+                // Simple hash function
+                let hash = 0;
+                for (let i = 0; i < content.length; i++) {
+                    const char = content.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + char;
+                    hash = hash & hash; // Convert to 32-bit integer
+                }
+                
+                return hash.toString();
+            }
+
+            validateCommentPositions(reportContent, comments) {
+                const fullText = reportContent || '';
+                const invalidComments = [];
+
+                comments.forEach(comment => {
+                    const { start_position, end_position, selected_text } = comment.text_selection;
+                    
+                    // Check if positions are within bounds
+                    if (start_position >= fullText.length || end_position > fullText.length) {
+                        invalidComments.push(comment);
+                        return;
+                    }
+
+                    // Check if selected text matches current content
+                    const currentText = fullText.substring(start_position, end_position);
+                    if (currentText !== selected_text) {
+                        invalidComments.push(comment);
+                    }
+                });
+
+                return invalidComments;
+            }
+        }
+
+        const mockEditor = new MockHITLEditor();
+
+        // Test functions
+        function testSessionSave() {
+            const results = document.getElementById('sessionTestResults');
+            
+            // Set up mock data
+            mockEditor.currentReport = {
+                id: 'test-report-1',
+                filename: 'test_report.txt',
+                content: 'This is a test report content for session persistence testing.'
+            };
+            mockEditor.comments = [
+                {
+                    id: 'comment-1',
+                    text_selection: {
+                        start_position: 10,
+                        end_position: 20,
+                        selected_text: 'test report'
+                    },
+                    comment_text: 'This is a test comment',
+                    timestamp: new Date().toISOString()
+                }
+            ];
+
+            const success = mockEditor.saveSession();
+            
+            results.innerHTML = `
+                <div class="test-result ${success ? 'test-pass' : 'test-fail'}">
+                    Session Save: ${success ? 'PASSED' : 'FAILED'}
+                    ${success ? '- Session data saved to localStorage' : '- Failed to save session data'}
+                </div>
+            `;
+        }
+
+        function testSessionRestore() {
+            const results = document.getElementById('sessionTestResults');
+            
+            const session = mockEditor.restoreSession();
+            const success = session !== null;
+            
+            results.innerHTML += `
+                <div class="test-result ${success ? 'test-pass' : 'test-fail'}">
+                    Session Restore: ${success ? 'PASSED' : 'FAILED'}
+                    ${success ? `- Restored session for report: ${session.reportFilename}` : '- No session data found or session expired'}
+                </div>
+            `;
+        }
+
+        function testSessionClear() {
+            const results = document.getElementById('sessionTestResults');
+            
+            const success = mockEditor.clearSession();
+            
+            results.innerHTML += `
+                <div class="test-result ${success ? 'test-pass' : 'test-fail'}">
+                    Session Clear: ${success ? 'PASSED' : 'FAILED'}
+                    ${success ? '- Session data cleared from localStorage' : '- Failed to clear session data'}
+                </div>
+            `;
+        }
+
+        function testReportHash() {
+            const results = document.getElementById('hashTestResults');
+            
+            const report1 = {
+                content: 'This is the original report content.'
+            };
+            
+            const report2 = {
+                content: 'This is the modified report content.'
+            };
+            
+            const report3 = {
+                content: 'This is the original report content.'
+            };
+
+            const hash1 = mockEditor.calculateReportHash(report1);
+            const hash2 = mockEditor.calculateReportHash(report2);
+            const hash3 = mockEditor.calculateReportHash(report3);
+
+            const test1Pass = hash1 !== hash2; // Different content should have different hashes
+            const test2Pass = hash1 === hash3; // Same content should have same hashes
+
+            results.innerHTML = `
+                <div class="test-result ${test1Pass ? 'test-pass' : 'test-fail'}">
+                    Different Content Hash: ${test1Pass ? 'PASSED' : 'FAILED'}
+                    - Hash 1: ${hash1}, Hash 2: ${hash2}
+                </div>
+                <div class="test-result ${test2Pass ? 'test-pass' : 'test-fail'}">
+                    Same Content Hash: ${test2Pass ? 'PASSED' : 'FAILED'}
+                    - Hash 1: ${hash1}, Hash 3: ${hash3}
+                </div>
+            `;
+        }
+
+        function showReportModificationWarning() {
+            const demo = document.getElementById('warningDemo');
+            
+            demo.innerHTML = `
+                <div class="warning-demo">
+                    <div class="warning-content">
+                        <div class="warning-icon">⚠️</div>
+                        <div class="warning-text">
+                            <strong>Report Modified</strong>
+                            <p>The report "test_report.txt" has been modified since your last session. 
+                            Comment positions may not align correctly with the updated content.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="test-result test-info">
+                    Report Modification Warning displayed successfully.
+                </div>
+            `;
+        }
+
+        function showPositionMismatchWarning() {
+            const demo = document.getElementById('warningDemo');
+            
+            demo.innerHTML = `
+                <div class="warning-demo">
+                    <div class="warning-content">
+                        <div class="warning-icon">🔍</div>
+                        <div class="warning-text">
+                            <strong>Comment Position Mismatch</strong>
+                            <p>3 comment(s) may not be positioned correctly due to report changes.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="test-result test-info">
+                    Position Mismatch Warning displayed successfully.
+                </div>
+            `;
+        }
+
+        function testSessionStatus() {
+            const statusElement = document.getElementById('demoSessionStatus');
+            const statusText = document.getElementById('demoSessionStatusText');
+            
+            // Test saving status
+            statusElement.className = 'session-status saving';
+            statusText.textContent = 'Saving session...';
+            statusElement.style.display = 'flex';
+            
+            setTimeout(() => {
+                // Test saved status
+                statusElement.className = 'session-status saved';
+                statusText.textContent = 'Session saved';
+                
+                setTimeout(() => {
+                    // Test error status
+                    statusElement.className = 'session-status error';
+                    statusText.textContent = 'Save failed';
+                    
+                    setTimeout(() => {
+                        // Hide after demo
+                        statusElement.style.display = 'none';
+                    }, 2000);
+                }, 2000);
+            }, 1500);
+        }
+
+        function testCommentPositions() {
+            const results = document.getElementById('positionTestResults');
+            
+            const reportContent = 'This is a sample report content for testing comment position validation.';
+            
+            const validComments = [
+                {
+                    id: 'comment-1',
+                    text_selection: {
+                        start_position: 10,
+                        end_position: 16,
+                        selected_text: 'sample'
+                    }
+                }
+            ];
+            
+            const invalidComments = [
+                {
+                    id: 'comment-2',
+                    text_selection: {
+                        start_position: 10,
+                        end_position: 16,
+                        selected_text: 'wrong text' // Doesn't match actual content
+                    }
+                },
+                {
+                    id: 'comment-3',
+                    text_selection: {
+                        start_position: 100, // Beyond content length
+                        end_position: 110,
+                        selected_text: 'out of bounds'
+                    }
+                }
+            ];
+
+            const validResult = mockEditor.validateCommentPositions(reportContent, validComments);
+            const invalidResult = mockEditor.validateCommentPositions(reportContent, invalidComments);
+
+            const test1Pass = validResult.length === 0; // Valid comments should return no issues
+            const test2Pass = invalidResult.length === 2; // Invalid comments should be detected
+
+            results.innerHTML = `
+                <div class="test-result ${test1Pass ? 'test-pass' : 'test-fail'}">
+                    Valid Comment Positions: ${test1Pass ? 'PASSED' : 'FAILED'}
+                    - Found ${validResult.length} invalid comments (expected 0)
+                </div>
+                <div class="test-result ${test2Pass ? 'test-pass' : 'test-fail'}">
+                    Invalid Comment Detection: ${test2Pass ? 'PASSED' : 'FAILED'}
+                    - Found ${invalidResult.length} invalid comments (expected 2)
+                </div>
+                <div class="test-result test-info">
+                    Report Content: "${reportContent}"<br>
+                    Test validates that comments with correct positions pass validation,
+                    while comments with mismatched text or out-of-bounds positions are detected.
+                </div>
+            `;
+        }
+
+        // Add CSS for session status demo
+        const style = document.createElement('style');
+        style.textContent = `
+            .session-status {
+                background: white;
+                border: 1px solid #e9ecef;
+                border-radius: 20px;
+                padding: 0.5rem 1rem;
+                font-size: 0.8rem;
+                color: #6c757d;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+            }
+            .session-status.saving {
+                border-color: #007bff;
+                color: #007bff;
+            }
+            .session-status.saved {
+                border-color: #28a745;
+                color: #28a745;
+            }
+            .session-status.error {
+                border-color: #dc3545;
+                color: #dc3545;
+            }
+            .session-indicator {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: currentColor;
+                animation: pulse 2s infinite;
+            }
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>

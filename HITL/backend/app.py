@@ -51,13 +51,18 @@ def create_app(config_name=None):
                 if dev_html.exists():
                     return send_from_directory(str(app_root / 'frontend'), 'dev.html')
                 else:
-                    # Try modern static interface
-                    modern_index = Path(app.static_folder) / 'modern-index.html'
-                    if modern_index.exists():
-                        return send_from_directory(app.static_folder, 'modern-index.html')
+                    # Try clean static interface (without text highlighting issues)
+                    clean_index = Path(app.static_folder) / 'clean-index.html'
+                    if clean_index.exists():
+                        return send_from_directory(app.static_folder, 'clean-index.html')
                     else:
-                        # Final fallback to basic static folder
-                        static_index = Path(app.static_folder) / 'index.html'
+                        # Try modern static interface
+                        modern_index = Path(app.static_folder) / 'modern-index.html'
+                        if modern_index.exists():
+                            return send_from_directory(app.static_folder, 'modern-index.html')
+                        else:
+                            # Final fallback to basic static folder
+                            static_index = Path(app.static_folder) / 'index.html'
                         if static_index.exists():
                             return send_from_directory(app.static_folder, 'index.html')
                         else:

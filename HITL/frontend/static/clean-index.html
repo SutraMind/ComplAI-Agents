@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HITL Report Editor - Clean Version</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #1e293b;
+        }
+
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+            padding: 1rem 2rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+        }
+
+        .logo-text {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .select-container {
+            position: relative;
+        }
+
+        .report-select {
+            appearance: none;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px 40px 12px 16px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            min-width: 200px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .report-select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .select-arrow {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+            color: #64748b;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 12px 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
+        }
+
+        .btn-secondary:hover {
+            box-shadow: 0 8px 25px rgba(107, 114, 128, 0.3);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            height: calc(100vh - 120px);
+        }
+
+        /* Report Viewer */
+        .report-viewer {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .report-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+            background: rgba(248, 250, 252, 0.8);
+        }
+
+        .report-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1e293b;
+        }
+
+        .report-stats {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-chip {
+            background: rgba(37, 99, 235, 0.1);
+            color: #2563eb;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .report-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            line-height: 1.8;
+            font-size: 1rem;
+            user-select: text;
+            cursor: text;
+        }
+
+        .report-content::selection {
+            background: rgba(59, 130, 246, 0.2);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: #64748b;
+        }
+
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Comments Sidebar */
+        .comments-sidebar {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+            background: rgba(248, 250, 252, 0.8);
+        }
+
+        .sidebar-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .comment-count {
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .comments-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .comment-item {
+            background: rgba(248, 250, 252, 0.8);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .comment-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .comment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .comment-author {
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .comment-time {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .comment-selected-text {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-style: italic;
+            color: #1e40af;
+        }
+
+        .comment-text {
+            color: #374151;
+            line-height: 1.6;
+        }
+
+        .no-comments {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            text-align: center;
+            color: #64748b;
+        }
+
+        .no-comments-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-50px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid #e2e8f0;
+            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 8px;
+            transition: background 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .modal-body {
+            padding: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #374151;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            font-family: inherit;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .selected-text-preview {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 3px solid #3b82f6;
+            padding: 1rem;
+            border-radius: 8px;
+            font-style: italic;
+            color: #1e40af;
+            margin-bottom: 1.5rem;
+        }
+
+        .modal-actions {
+            padding: 1.5rem 2rem;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            border-left: 4px solid #10b981;
+            z-index: 2000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.error {
+            border-left-color: #ef4444;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: 1fr auto;
+                gap: 1rem;
+            }
+            
+            .comments-sidebar {
+                max-height: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .main-content {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <span class="material-icons">description</span>
+                    </div>
+                    <div class="logo-text">HITL Report Editor</div>
+                </div>
+                
+                <div class="header-controls">
+                    <div class="select-container">
+                        <select id="reportSelect" class="report-select">
+                            <option value="">Select a report...</option>
+                        </select>
+                        <span class="material-icons select-arrow">expand_more</span>
+                    </div>
+                    
+                    <button id="refreshBtn" class="btn btn-secondary">
+                        <span class="material-icons">refresh</span>
+                        Refresh
+                    </button>
+                    
+                    <button id="summaryBtn" class="btn" disabled>
+                        <span class="material-icons">auto_awesome</span>
+                        Generate Summary
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Report Viewer -->
+            <div class="report-viewer">
+                <div class="report-header">
+                    <div class="report-title" id="reportTitle">No Report Selected</div>
+                    <div class="report-stats" id="reportStats"></div>
+                </div>
+                <div class="report-content" id="reportContent">
+                    <div class="empty-state">
+                        <div class="empty-icon">📄</div>
+                        <h3>Select a report to begin</h3>
+                        <p>Choose a report from the dropdown above to start reviewing and adding comments.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comments Sidebar -->
+            <div class="comments-sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">
+                        <span class="material-icons">comment</span>
+                        Comments & Highlights
+                        <span class="comment-count" id="commentCount">0</span>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #666; margin-top: 4px;">
+                        📝 Highlighted text appears here only
+                    </div>
+                </div>
+                <div class="comments-list" id="commentsList">
+                    <div class="no-comments">
+                        <div class="no-comments-icon">💬</div>
+                        <p>No comments yet</p>
+                        <small>Select text in the report to add your first comment</small>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Comment Modal -->
+    <div id="commentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">
+                    <span class="material-icons">comment</span>
+                    Add Comment
+                </div>
+                <button class="modal-close" onclick="closeCommentModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="selected-text-preview" id="selectedTextPreview"></div>
+                <div class="form-group">
+                    <label class="form-label">Author</label>
+                    <input type="text" id="authorInput" class="form-input" value="Expert" placeholder="Your name">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Comment</label>
+                    <textarea id="commentInput" class="form-input form-textarea" placeholder="Enter your comment here..."></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeCommentModal()">Cancel</button>
+                <button class="btn" onclick="saveComment()">Save Comment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Application state
+        let currentReport = null;
+        let comments = [];
+        let selectedText = null;
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            loadReports();
+            bindEvents();
+        });
+
+        function bindEvents() {
+            document.getElementById('reportSelect').addEventListener('change', handleReportSelect);
+            document.getElementById('refreshBtn').addEventListener('click', loadReports);
+            document.getElementById('summaryBtn').addEventListener('click', generateSummary);
+            document.getElementById('reportContent').addEventListener('mouseup', handleTextSelection);
+        }
+
+        async function loadReports() {
+            try {
+                showToast('Loading reports...', 'info');
+                const response = await fetch('/api/reports');
+                const data = await response.json();
+                
+                if (data.success) {
+                    populateReportSelect(data.data);
+                    showToast('Reports loaded successfully', 'success');
+                } else {
+                    throw new Error(data.error || 'Failed to load reports');
+                }
+            } catch (error) {
+                console.error('Error loading reports:', error);
+                showToast('Failed to load reports: ' + error.message, 'error');
+            }
+        }
+
+        function populateReportSelect(reports) {
+            const select = document.getElementById('reportSelect');
+            select.innerHTML = '<option value="">Select a report...</option>';
+            
+            reports.forEach(report => {
+                const option = document.createElement('option');
+                option.value = report.id;
+                option.textContent = report.filename;
+                select.appendChild(option);
+            });
+        }
+
+        async function handleReportSelect(event) {
+            const reportId = event.target.value;
+            if (!reportId) {
+                clearReport();
+                return;
+            }
+
+            try {
+                showToast('Loading report...', 'info');
+                const response = await fetch(`/api/reports/${reportId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentReport = data.data;
+                    displayReport(currentReport);
+                    await loadComments(reportId);
+                    showToast('Report loaded successfully', 'success');
+                } else {
+                    throw new Error(data.error || 'Failed to load report');
+                }
+            } catch (error) {
+                console.error('Error loading report:', error);
+                showToast('Failed to load report: ' + error.message, 'error');
+            }
+        }
+
+        function displayReport(report) {
+            document.getElementById('reportTitle').textContent = report.filename;
+            
+            const stats = [];
+            if (report.metadata) {
+                stats.push(`${report.metadata.line_count} lines`);
+                stats.push(`${Math.round(report.metadata.file_size / 1024)} KB`);
+            }
+            
+            const statsHtml = stats.map(stat => `<span class="stat-chip">${stat}</span>`).join('');
+            document.getElementById('reportStats').innerHTML = statsHtml;
+            
+            // Display ONLY the original report content - ABSOLUTELY NO highlighting
+            const content = document.getElementById('reportContent');
+            content.innerHTML = `<div style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${escapeHtml(report.content)}</div>`;
+        }
+
+        async function loadComments(reportId) {
+            try {
+                const response = await fetch(`/api/reports/${reportId}/comments`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    comments = data.data || [];
+                    console.log('Loaded comments:', comments);
+                    displayComments();
+                    updateSummaryButton();
+                }
+            } catch (error) {
+                console.error('Error loading comments:', error);
+            }
+        }
+
+        function displayComments() {
+            const commentsList = document.getElementById('commentsList');
+            const commentCount = document.getElementById('commentCount');
+            
+            commentCount.textContent = comments.length;
+            
+            if (comments.length === 0) {
+                commentsList.innerHTML = `
+                    <div class="no-comments">
+                        <div class="no-comments-icon">💬</div>
+                        <p>No comments yet</p>
+                        <small>Select text in the report to add your first comment</small>
+                    </div>
+                `;
+                return;
+            }
+
+            const sortedComments = comments.sort((a, b) => 
+                (a.text_selection?.start_position || 0) - (b.text_selection?.start_position || 0)
+            );
+
+            commentsList.innerHTML = sortedComments.map((comment, index) => `
+                <div class="comment-item" data-comment-id="${comment.id}">
+                    <div class="comment-header">
+                        <div class="comment-author">
+                            <strong>${escapeHtml(comment.author)}</strong>
+                            <span style="font-size: 0.8rem; color: #666; margin-left: 8px;">Comment #${index + 1}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div class="comment-time">${formatDate(comment.timestamp)}</div>
+                            <button onclick="deleteComment('${comment.id}')" 
+                                    style="background: #dc3545; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 0.7rem; cursor: pointer; transition: all 0.2s ease;"
+                                    onmouseover="this.style.backgroundColor='#c82333'"
+                                    onmouseout="this.style.backgroundColor='#dc3545'"
+                                    title="Delete this comment">
+                                🗑️ Delete
+                            </button>
+                        </div>
+                    </div>
+                    <div class="comment-selected-text" style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 8px; margin: 12px 0;">
+                        <div style="font-size: 0.8rem; color: #856404; font-weight: 600; margin-bottom: 6px;">📝 HIGHLIGHTED TEXT:</div>
+                        <div style="font-style: italic; color: #664d03;">"${escapeHtml(comment.text_selection?.selected_text || '')}"</div>
+                        <div style="font-size: 0.75rem; color: #999; margin-top: 6px;">
+                            Position: ${comment.text_selection?.start_position || 0} - ${comment.text_selection?.end_position || 0}
+                        </div>
+                    </div>
+                    <div class="comment-text" style="background: #f8f9fa; padding: 12px; border-radius: 8px; border-left: 4px solid #007bff;">
+                        <div style="font-size: 0.8rem; color: #495057; font-weight: 600; margin-bottom: 6px;">💬 HUMAN FEEDBACK:</div>
+                        <div style="color: #212529;">${escapeHtml(comment.comment_text)}</div>
+                    </div>
+                    ${comment.section_context ? `
+                        <div style="margin-top: 8px; font-size: 0.75rem; color: #6c757d; font-style: italic;">
+                            📍 Section: ${escapeHtml(comment.section_context)}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function handleTextSelection() {
+            const selection = window.getSelection();
+            
+            if (selection.rangeCount === 0 || selection.isCollapsed) {
+                return;
+            }
+
+            const selectedTextContent = selection.toString().trim();
+            if (selectedTextContent.length < 3) {
+                return;
+            }
+
+            // Check if selection is within report content
+            const reportContent = document.getElementById('reportContent');
+            if (!reportContent.contains(selection.anchorNode)) {
+                return;
+            }
+
+            selectedText = {
+                text: selectedTextContent,
+                startOffset: getTextOffset(selection.getRangeAt(0).startContainer, selection.getRangeAt(0).startOffset),
+                endOffset: getTextOffset(selection.getRangeAt(0).endContainer, selection.getRangeAt(0).endOffset)
+            };
+
+            showCommentModal();
+        }
+
+        function getTextOffset(node, offset) {
+            const reportContent = document.getElementById('reportContent');
+            const walker = document.createTreeWalker(
+                reportContent,
+                NodeFilter.SHOW_TEXT,
+                null,
+                false
+            );
+
+            let textOffset = 0;
+            let currentNode;
+
+            while (currentNode = walker.nextNode()) {
+                if (currentNode === node) {
+                    return textOffset + offset;
+                }
+                textOffset += currentNode.textContent.length;
+            }
+
+            return textOffset;
+        }
+
+        function showCommentModal() {
+            if (!selectedText) return;
+            
+            document.getElementById('selectedTextPreview').textContent = `"${selectedText.text}"`;
+            document.getElementById('commentInput').value = '';
+            document.getElementById('commentModal').classList.add('show');
+            document.getElementById('commentInput').focus();
+        }
+
+        function closeCommentModal() {
+            document.getElementById('commentModal').classList.remove('show');
+            selectedText = null;
+            window.getSelection().removeAllRanges();
+        }
+
+        async function saveComment() {
+            const author = document.getElementById('authorInput').value.trim() || 'Expert';
+            const commentText = document.getElementById('commentInput').value.trim();
+            
+            if (!commentText) {
+                showToast('Please enter a comment', 'error');
+                return;
+            }
+
+            if (!selectedText || !currentReport) {
+                showToast('No text selected or report loaded', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/reports/${currentReport.id}/comments`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text_selection: {
+                            start_position: selectedText.startOffset,
+                            end_position: selectedText.endOffset,
+                            selected_text: selectedText.text
+                        },
+                        comment_text: commentText,
+                        author: author
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    comments.push(data.data);
+                    console.log('Added comment:', data.data);
+                    displayComments();
+                    updateSummaryButton();
+                    closeCommentModal();
+                    showToast('Comment added successfully', 'success');
+                } else {
+                    throw new Error(data.error || 'Failed to save comment');
+                }
+            } catch (error) {
+                console.error('Error saving comment:', error);
+                showToast('Failed to save comment: ' + error.message, 'error');
+            }
+        }
+
+        function updateSummaryButton() {
+            const summaryBtn = document.getElementById('summaryBtn');
+            summaryBtn.disabled = comments.length === 0;
+        }
+
+        function generateSummary() {
+            if (comments.length === 0) {
+                showToast('No comments to summarize', 'error');
+                return;
+            }
+            
+            // Generate comprehensive summary with full report + highlighted sections
+            const summary = generateComprehensiveSummary();
+
+            // Download as text file
+            const blob = new Blob([summary], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `HITL-Summary-${currentReport.id}-${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showToast('Summary downloaded successfully', 'success');
+        }
+
+        function generateComprehensiveSummary() {
+            const now = new Date();
+            const authors = [...new Set(comments.map(c => c.author))];
+            
+            // Sort comments by position in document
+            const sortedComments = comments.sort((a, b) => 
+                (a.text_selection?.start_position || 0) - (b.text_selection?.start_position || 0)
+            );
+
+            return `HUMAN-IN-THE-LOOP REPORT EDITOR
+COMPREHENSIVE SUMMARY REPORT
+=====================================
+
+Report Information:
+- Original File: ${currentReport.filename}
+- Generated: ${now.toLocaleString()}
+- Total Comments: ${comments.length}
+- Reviewers: ${authors.join(', ')}
+- Report Size: ${Math.round((currentReport.metadata?.file_size || 0) / 1024)} KB
+- Lines: ${currentReport.metadata?.line_count || 0}
+
+=====================================
+SECTION 1: ORIGINAL REPORT
+=====================================
+
+${currentReport.content}
+
+=====================================
+SECTION 2: HIGHLIGHTED TEXT WITH HUMAN FEEDBACK
+=====================================
+
+${sortedComments.map((comment, index) => `
+HIGHLIGHT #${index + 1}
+-----------------
+Position: Characters ${comment.text_selection?.start_position || 0} - ${comment.text_selection?.end_position || 0}
+Section Context: ${comment.section_context || 'Main Content'}
+Reviewer: ${comment.author}
+Date: ${new Date(comment.timestamp).toLocaleString()}
+
+HIGHLIGHTED TEXT:
+"${comment.text_selection?.selected_text || ''}"
+
+HUMAN FEEDBACK:
+${comment.comment_text}
+
+`).join('\n')}
+
+=====================================
+SECTION 3: SUMMARY OF HUMAN FEEDBACK
+=====================================
+
+Total Feedback Items: ${comments.length}
+
+Feedback by Reviewer:
+${authors.map(author => {
+    const authorComments = comments.filter(c => c.author === author);
+    return `- ${author}: ${authorComments.length} comment(s)`;
+}).join('\n')}
+
+Key Areas of Focus:
+${sortedComments.map((comment, index) => 
+    `${index + 1}. ${comment.text_selection?.selected_text?.substring(0, 50)}... - ${comment.comment_text.substring(0, 100)}${comment.comment_text.length > 100 ? '...' : ''}`
+).join('\n')}
+
+=====================================
+SECTION 4: RECOMMENDATIONS
+=====================================
+
+Based on the human feedback provided:
+
+${sortedComments.map((comment, index) => 
+    `${index + 1}. Review: "${comment.text_selection?.selected_text}"
+   Action: ${comment.comment_text}
+   Priority: ${comment.comment_text.toLowerCase().includes('critical') || comment.comment_text.toLowerCase().includes('important') ? 'HIGH' : 'MEDIUM'}
+`).join('\n')}
+
+=====================================
+END OF REPORT
+=====================================
+
+This report was generated by the HITL Report Editor system.
+All highlighted text and feedback represents human expert review.
+Please address the feedback items before finalizing the document.
+`;
+        }
+
+        function clearReport() {
+            currentReport = null;
+            comments = [];
+            document.getElementById('reportTitle').textContent = 'No Report Selected';
+            document.getElementById('reportStats').innerHTML = '';
+            document.getElementById('reportContent').innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📄</div>
+                    <h3>Select a report to begin</h3>
+                    <p>Choose a report from the dropdown above to start reviewing and adding comments.</p>
+                </div>
+            `;
+            displayComments();
+            updateSummaryButton();
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        function formatDate(dateString) {
+            try {
+                return new Date(dateString).toLocaleString();
+            } catch {
+                return 'Unknown';
+            }
+        }
+
+        async function deleteComment(commentId) {
+            if (!confirm('Are you sure you want to delete this comment? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/comments/${commentId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Remove comment from local array
+                    comments = comments.filter(c => c.id !== commentId);
+                    displayComments();
+                    updateSummaryButton();
+                    showToast('Comment deleted successfully', 'success');
+                } else {
+                    throw new Error(data.error || 'Failed to delete comment');
+                }
+            } catch (error) {
+                console.error('Error deleting comment:', error);
+                showToast('Failed to delete comment: ' + error.message, 'error');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

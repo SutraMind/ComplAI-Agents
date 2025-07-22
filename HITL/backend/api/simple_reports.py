@@ -234,3 +234,58 @@ def parse_content_sections(content):
         })
     
     return sections
+
+api_bp.route('/comments/<comment_id>', methods=['DELETE'])
+def delete_comment(comment_id):
+    """Delete a specific comment."""
+    try:
+        # Validate comment ID
+        if not comment_id or not comment_id.strip():
+            return jsonify({
+                'success': False,
+                'error': 'Invalid comment ID'
+            }), 400
+        
+        # Find which report this comment belongs to
+        comments_dir = Path(current_app.config.get('COMMENTS_DIR', 'data/comments'))
+        comment_deleted = False
+        
+        # Search through all comment files to find and delete the comment
+        for comments_file in comments_dir.glob('*.json'):
+            try:
+                import json
+                with open(comments_file, 'r', encoding='utf-8') as f:
+                    comments = json.load(f)
+                
+                # Filter out the comment to delete
+                original_count = len(comments)
+                comments = [c for c in comments if c.get('id') != comment_id]
+                
+                if len(comments) < original_count:
+                    # Comment was found and removed
+                    with open(comments_file, 'w', encoding='utf-8') as f:
+                        json.dump(comments, f, indent=2, ensure_ascii=False)
+                    comment_deleted = True
+                    break
+                    
+            except Exception as e:
+                current_app.logger.warning(f"Error processing {comments_file}: {e}")
+                continue
+        
+        if comment_deleted:
+            return jsonify({
+                'success': True,
+                'message': 'Comment deleted successfully'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Comment not found'
+            }), 404
+        
+    except Exception as e:
+        current_app.logger.error(f"Error deleting comment {comment_id}: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete comment'
+        }), 500

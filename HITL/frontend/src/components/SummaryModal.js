@@ -1,0 +1,437 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Box,
+  Typography,
+  Paper,
+  IconButton,
+  LinearProgress,
+  Chip,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Alert,
+} from '@mui/material';
+import {
+  Close as CloseIcon,
+  AutoAwesome as SummaryIcon,
+  Download as DownloadIcon,
+  Comment as CommentIcon,
+  Person as PersonIcon,
+  Schedule as TimeIcon,
+  Assessment as StatsIcon,
+} from '@mui/icons-material';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-toastify';
+
+const SummaryModal = ({ open, onClose, reportId, comments }) => {
+  const [loading, setLoading] = useState(false);
+  const [summary, setSummary] = useState(null);
+  const [error, setError] = useState(null);
+
+  // Generate summary when modal opens
+  useEffect(() => {
+    if (open && reportId && comments.length > 0) {
+      generateSummary();
+    }
+  }, [open, reportId, comments]);
+
+  const generateSummary = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Simulate API call for now since we don't have LLM integration yet
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Generate a mock summary based on comments
+      const mockSummary = generateMockSummary(comments);
+      setSummary(mockSummary);
+      
+      toast.success('Summary generated successfully!');
+    } catch (err) {
+      setError('Failed to generate summary. Please try again.');
+      toast.error('Failed to generate summary');
+      console.error('Error generating summary:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateMockSummary = (comments) => {
+    const authors = [...new Set(comments.map(c => c.author))];
+    const totalComments = comments.length;
+    const avgCommentLength = Math.round(
+      comments.reduce((sum, c) => sum + c.comment_text.length, 0) / totalComments
+    );
+
+    // Group comments by section
+    const sectionGroups = comments.reduce((groups, comment) => {
+      const section = comment.section_context || 'Main Content';
+      if (!groups[section]) {
+        groups[section] = [];
+      }
+      groups[section].push(comment);
+      return groups;
+    }, {});
+
+    // Generate key themes (mock)
+    const themes = [
+      'Data Protection Compliance',
+      'Security Implementation',
+      'User Privacy Concerns',
+      'Audit Trail Requirements',
+      'Policy Review Recommendations',
+    ];
+
+    return {
+      overview: {
+        totalComments,
+        authors: authors.length,
+        avgCommentLength,
+        sectionsCommented: Object.keys(sectionGroups).length,
+      },
+      keyThemes: themes.slice(0, Math.min(3, Math.ceil(totalComments / 2))),
+      sectionBreakdown: Object.entries(sectionGroups).map(([section, sectionComments]) => ({
+        section,
+        commentCount: sectionComments.length,
+        authors: [...new Set(sectionComments.map(c => c.author))],
+        keyPoints: sectionComments.slice(0, 2).map(c => c.comment_text.substring(0, 100) + '...'),
+      })),
+      recommendations: [
+        'Review and address all security-related comments',
+        'Implement suggested data protection measures',
+        'Update documentation based on expert feedback',
+        'Schedule follow-up review after implementing changes',
+      ].slice(0, Math.min(4, Math.ceil(totalComments / 3))),
+      generatedAt: new Date().toISOString(),
+    };
+  };
+
+  const handleDownload = () => {
+    if (!summary) return;
+
+    const summaryText = generateSummaryText(summary);
+    const blob = new Blob([summaryText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `report-summary-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success('Summary downloaded successfully!');
+  };
+
+  const generateSummaryText = (summary) => {
+    return `
+HITL Report Editor - Summary Report
+Generated: ${new Date(summary.generatedAt).toLocaleString()}
+
+OVERVIEW
+========
+Total Comments: ${summary.overview.totalComments}
+Contributing Authors: ${summary.overview.authors}
+Average Comment Length: ${summary.overview.avgCommentLength} characters
+Sections with Comments: ${summary.overview.sectionsCommented}
+
+KEY THEMES
+==========
+${summary.keyThemes.map((theme, i) => `${i + 1}. ${theme}`).join('\n')}
+
+SECTION BREAKDOWN
+=================
+${summary.sectionBreakdown.map(section => `
+${section.section}
+- Comments: ${section.commentCount}
+- Authors: ${section.authors.join(', ')}
+- Key Points:
+${section.keyPoints.map(point => `  • ${point}`).join('\n')}
+`).join('\n')}
+
+RECOMMENDATIONS
+===============
+${summary.recommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
+
+---
+Generated by HITL Report Editor
+    `.trim();
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <Dialog
+          open={open}
+          onClose={onClose}
+          maxWidth="lg"
+          fullWidth
+          PaperProps={{
+            component: motion.div,
+            initial: { opacity: 0, scale: 0.9, y: 50 },
+            animate: { opacity: 1, scale: 1, y: 0 },
+            exit: { opacity: 0, scale: 0.9, y: 50 },
+            transition: { duration: 0.3, ease: 'easeOut' },
+            sx: {
+              borderRadius: 3,
+              overflow: 'hidden',
+              maxHeight: '90vh',
+            },
+          }}
+        >
+          {/* Header */}
+          <DialogTitle
+            sx={{
+              bgcolor: 'secondary.main',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              py: 2,
+            }}
+          >
+            <SummaryIcon />
+            <Typography variant="h6" sx={{ flex: 1, fontWeight: 600 }}>
+              Report Summary
+            </Typography>
+            <IconButton
+              onClick={onClose}
+              sx={{ color: 'white' }}
+              size="small"
+            >
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+
+          <DialogContent sx={{ p: 0 }}>
+            {loading && (
+              <Box sx={{ p: 4, textAlign: 'center' }}>
+                <SummaryIcon sx={{ fontSize: 64, color: 'secondary.main', mb: 2 }} />
+                <Typography variant="h6" sx={{ mb: 2 }}>
+                  Generating Summary...
+                </Typography>
+                <LinearProgress sx={{ mb: 2, borderRadius: 1 }} />
+                <Typography variant="body2" color="text.secondary">
+                  Analyzing {comments.length} comments and generating insights
+                </Typography>
+              </Box>
+            )}
+
+            {error && (
+              <Box sx={{ p: 4 }}>
+                <Alert severity="error" sx={{ borderRadius: 2 }}>
+                  {error}
+                </Alert>
+              </Box>
+            )}
+
+            {summary && !loading && (
+              <Box sx={{ p: 3 }}>
+                {/* Overview */}
+                <Box sx={{ mb: 4 }}>
+                  <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <StatsIcon color="primary" />
+                    Overview
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                    <Chip 
+                      label={`${summary.overview.totalComments} Comments`}
+                      color="primary"
+                      icon={<CommentIcon />}
+                    />
+                    <Chip 
+                      label={`${summary.overview.authors} Authors`}
+                      color="secondary"
+                      icon={<PersonIcon />}
+                    />
+                    <Chip 
+                      label={`${summary.overview.sectionsCommented} Sections`}
+                      color="success"
+                    />
+                    <Chip 
+                      label={`${summary.overview.avgCommentLength} avg chars`}
+                      color="info"
+                    />
+                  </Box>
+                </Box>
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Key Themes */}
+                <Box sx={{ mb: 4 }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    Key Themes
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    {summary.keyThemes.map((theme, index) => (
+                      <Chip
+                        key={index}
+                        label={theme}
+                        variant="outlined"
+                        color="primary"
+                        sx={{ mb: 1 }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Section Breakdown */}
+                <Box sx={{ mb: 4 }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    Section Breakdown
+                  </Typography>
+                  {summary.sectionBreakdown.map((section, index) => (
+                    <Paper
+                      key={index}
+                      elevation={0}
+                      sx={{
+                        p: 3,
+                        mb: 2,
+                        border: '1px solid',
+                        borderColor: 'grey.200',
+                        borderRadius: 2,
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 600, flex: 1 }}>
+                          {section.section}
+                        </Typography>
+                        <Chip 
+                          label={`${section.commentCount} comments`} 
+                          size="small" 
+                          color="primary"
+                        />
+                      </Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        Authors: {section.authors.join(', ')}
+                      </Typography>
+                      <List dense>
+                        {section.keyPoints.map((point, pointIndex) => (
+                          <ListItem key={pointIndex} sx={{ pl: 0 }}>
+                            <ListItemIcon sx={{ minWidth: 20 }}>
+                              <Box
+                                sx={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  bgcolor: 'primary.main',
+                                }}
+                              />
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={point}
+                              primaryTypographyProps={{
+                                variant: 'body2',
+                                color: 'text.secondary',
+                              }}
+                            />
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Paper>
+                  ))}
+                </Box>
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Recommendations */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    Recommendations
+                  </Typography>
+                  <List>
+                    {summary.recommendations.map((recommendation, index) => (
+                      <ListItem key={index} sx={{ pl: 0 }}>
+                        <ListItemIcon>
+                          <Box
+                            sx={{
+                              width: 24,
+                              height: 24,
+                              borderRadius: '50%',
+                              bgcolor: 'success.main',
+                              color: 'white',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.875rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {index + 1}
+                          </Box>
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={recommendation}
+                          primaryTypographyProps={{
+                            variant: 'body1',
+                          }}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+
+                {/* Generated timestamp */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 3, pt: 2, borderTop: '1px solid', borderColor: 'grey.200' }}>
+                  <TimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                  <Typography variant="caption" color="text.secondary">
+                    Generated on {formatDate(summary.generatedAt)}
+                  </Typography>
+                </Box>
+              </Box>
+            )}
+          </DialogContent>
+
+          {/* Actions */}
+          <DialogActions
+            sx={{
+              p: 3,
+              pt: 0,
+              gap: 2,
+            }}
+          >
+            <Button
+              onClick={onClose}
+              variant="outlined"
+              size="large"
+            >
+              Close
+            </Button>
+            {summary && (
+              <Button
+                onClick={handleDownload}
+                variant="contained"
+                size="large"
+                startIcon={<DownloadIcon />}
+                sx={{ minWidth: 140 }}
+              >
+                Download Summary
+              </Button>
+            )}
+          </DialogActions>
+        </Dialog>
+      )}
+    </AnimatePresence>
+  );
+};
+
+export default SummaryModal;
