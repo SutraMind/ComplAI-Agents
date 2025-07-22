@@ -10,17 +10,21 @@ from typing import List, Optional, Dict, Any
 from flask import current_app
 
 from ..models.report import Report, ReportMetadata, ReportSection
-from ..utils.file_operations import FileOperations
+from ..utils.file_operations import FileOperations, DataPersistence
 from ..utils.security import SecurityValidator
 
 
 class ReportService:
     """Service class for report management operations."""
     
-    def __init__(self):
+    def __init__(self, data_directory: str = None):
         """Initialize the report service."""
-        self.file_ops = FileOperations()
-        self.security = SecurityValidator()
+        if data_directory is None:
+            data_directory = str(current_app.config.get('DATA_DIR', 'data'))
+        
+        self.file_ops = FileOperations(data_directory)
+        self.data_persistence = DataPersistence(data_directory)
+        self.security = SecurityValidator(data_directory)
     
     def create_report(self, filename: str, content: str) -> Optional[Report]:
         """
@@ -93,20 +97,50 @@ class ReportService:
             if not self.security.validate_id(report_id):
                 raise ValueError(f"Invalid report ID: {report_id}")
             
-            # Load report from file system
+            # Try to load from JSON first
             report_data = self._load_report_from_file(report_id)
-            if not report_data:
-                return None
+            if report_data:
+                # Create report object from data
+                report = Report.from_dict(report_data)
+                
+                # Validate loaded report
+                if not report.validate():
+                    current_app.logger.warning(f"Loaded report {report_id} failed validation")
+                    return None
+                
+                return report
             
-            # Create report object from data
-            report = Report.from_dict(report_data)
+            # Try to load from text file
+            reports_dir = Path(current_app.config['REPORTS_DIR'])
+            for ext in ['.txt', '.md']:
+                text_file = reports_dir / f"{report_id}{ext}"
+                if text_file.exists():
+                    content = text_file.read_text(encoding='utf-8')
+                    stat = text_file.stat()
+                    
+                    # Create metadata
+                    metadata = ReportMetadata(
+                        created_at=datetime.fromtimestamp(stat.st_ctime),
+                        modified_at=datetime.fromtimestamp(stat.st_mtime),
+                        file_size=len(content.encode('utf-8')),
+                        line_count=len(content.split('\n'))
+                    )
+                    
+                    # Parse content into sections
+                    sections = self._parse_content_into_sections(content)
+                    
+                    # Create report object
+                    report = Report(
+                        id=report_id,
+                        filename=text_file.name,
+                        content=content,
+                        sections=sections,
+                        metadata=metadata
+                    )
+                    
+                    return report
             
-            # Validate loaded report
-            if not report.validate():
-                current_app.logger.warning(f"Loaded report {report_id} failed validation")
-                return None
-            
-            return report
+            return None
             
         except Exception as e:
             current_app.logger.error(f"Error retrieving report {report_id}: {str(e)}")
@@ -200,28 +234,45 @@ class ReportService:
             reports_dir = Path(current_app.config['REPORTS_DIR'])
             report_list = []
             
-            # Scan reports directory
-            for report_file in reports_dir.glob('*.json'):
-                try:
-                    report_id = report_file.stem
-                    report_data = self._load_report_from_file(report_id)
-                    
-                    if report_data:
-                        # Extract basic metadata
-                        metadata = {
-                            'id': report_data.get('id'),
-                            'filename': report_data.get('filename'),
-                            'created_at': report_data.get('metadata', {}).get('created_at'),
-                            'modified_at': report_data.get('metadata', {}).get('modified_at'),
-                            'file_size': report_data.get('metadata', {}).get('file_size'),
-                            'line_count': report_data.get('metadata', {}).get('line_count'),
-                            'section_count': len(report_data.get('sections', []))
-                        }
-                        report_list.append(metadata)
+            # Scan for both JSON and text files
+            for report_file in reports_dir.glob('*'):
+                if report_file.suffix in ['.json', '.txt', '.md']:
+                    try:
+                        report_id = report_file.stem
                         
-                except Exception as e:
-                    current_app.logger.warning(f"Error processing report file {report_file}: {str(e)}")
-                    continue
+                        if report_file.suffix == '.json':
+                            # Load from JSON
+                            report_data = self._load_report_from_file(report_id)
+                            if report_data:
+                                metadata = {
+                                    'id': report_data.get('id'),
+                                    'filename': report_data.get('filename'),
+                                    'created_at': report_data.get('metadata', {}).get('created_at'),
+                                    'modified_at': report_data.get('metadata', {}).get('modified_at'),
+                                    'file_size': report_data.get('metadata', {}).get('file_size'),
+                                    'line_count': report_data.get('metadata', {}).get('line_count'),
+                                    'section_count': len(report_data.get('sections', []))
+                                }
+                                report_list.append(metadata)
+                        else:
+                            # Load from text file
+                            content = report_file.read_text(encoding='utf-8')
+                            stat = report_file.stat()
+                            
+                            metadata = {
+                                'id': report_id,
+                                'filename': report_file.name,
+                                'created_at': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                                'modified_at': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                                'file_size': len(content.encode('utf-8')),
+                                'line_count': len(content.split('\n')),
+                                'section_count': len(self._parse_content_into_sections(content))
+                            }
+                            report_list.append(metadata)
+                        
+                    except Exception as e:
+                        current_app.logger.warning(f"Error processing report file {report_file}: {str(e)}")
+                        continue
             
             # Sort by modified date (newest first)
             report_list.sort(key=lambda x: x.get('modified_at', ''), reverse=True)
@@ -381,7 +432,7 @@ class ReportService:
             report_file = self._get_report_file_path(report.id)
             report_data = report.to_dict()
             
-            return self.file_ops.write_json_file(str(report_file), report_data)
+            return self.data_persistence.save_json(f"reports/{report.id}.json", report_data)
             
         except Exception as e:
             current_app.logger.error(f"Error saving report {report.id}: {str(e)}")
@@ -403,7 +454,7 @@ class ReportService:
             if not report_file.exists():
                 return None
             
-            return self.file_ops.read_json_file(str(report_file))
+            return self.data_persistence.load_json(f"reports/{report_id}.json")
             
         except Exception as e:
             current_app.logger.error(f"Error loading report {report_id}: {str(e)}")

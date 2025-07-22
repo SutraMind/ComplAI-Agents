@@ -9,10 +9,7 @@ from ..services.report_service import ReportService
 from ..services.comment_service import CommentService
 
 
-# Initialize services
-summary_service = SummaryService()
-report_service = ReportService()
-comment_service = CommentService()
+# Services will be instantiated in route handlers
 
 
 @api_bp.route('/reports/<report_id>/summary', methods=['POST'])
@@ -35,6 +32,7 @@ def generate_summary(report_id):
             }), 400
         
         # Get report
+        report_service = ReportService()
         report = report_service.get_report(report_id)
         if not report:
             return jsonify({
@@ -43,9 +41,11 @@ def generate_summary(report_id):
             }), 404
         
         # Get comments for the report
+        comment_service = CommentService()
         comments = comment_service.get_comments_for_report(report_id)
         
         # Generate summary using service
+        summary_service = SummaryService()
         summary = summary_service.generate_summary(report, comments)
         
         if not summary:
@@ -88,6 +88,7 @@ def get_summary(report_id):
             }), 400
         
         # Get summary using service
+        summary_service = SummaryService()
         summary = summary_service.get_summary(report_id)
         
         if not summary:
@@ -130,6 +131,7 @@ def update_summary(report_id):
             }), 400
         
         # Get report
+        report_service = ReportService()
         report = report_service.get_report(report_id)
         if not report:
             return jsonify({
@@ -138,9 +140,11 @@ def update_summary(report_id):
             }), 404
         
         # Get updated comments for the report
+        comment_service = CommentService()
         comments = comment_service.get_comments_for_report(report_id)
         
         # Update summary using service
+        summary_service = SummaryService()
         updated_summary = summary_service.update_summary(report, comments)
         
         if not updated_summary:
@@ -183,6 +187,7 @@ def delete_summary(report_id):
             }), 400
         
         # Delete summary using service
+        summary_service = SummaryService()
         success = summary_service.delete_summary(report_id)
         
         if not success:
@@ -225,6 +230,7 @@ def export_summary(report_id):
             }), 400
         
         # Export summary using service
+        summary_service = SummaryService()
         exported_text = summary_service.export_summary_to_text(report_id)
         
         if not exported_text:
@@ -270,6 +276,7 @@ def get_summary_insights(report_id):
             }), 400
         
         # Get insights using service
+        summary_service = SummaryService()
         insights = summary_service.get_summary_insights(report_id)
         
         if insights.get('status') == 'error':
@@ -312,6 +319,7 @@ def get_summary_preview(report_id):
             }), 400
         
         # Get report
+        report_service = ReportService()
         report = report_service.get_report(report_id)
         if not report:
             return jsonify({
@@ -320,9 +328,11 @@ def get_summary_preview(report_id):
             }), 404
         
         # Get comments for the report
+        comment_service = CommentService()
         comments = comment_service.get_comments_for_report(report_id)
         
         # Generate preview using service
+        summary_service = SummaryService()
         preview = summary_service.generate_summary_preview(report, comments)
         
         if preview.get('status') == 'error':

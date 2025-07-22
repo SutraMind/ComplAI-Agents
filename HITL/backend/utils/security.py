@@ -64,6 +64,25 @@ class PathValidator:
         
         return True
     
+    def validate_id(self, id_string: str) -> bool:
+        """Validate ID string for security and format."""
+        if not id_string or not id_string.strip():
+            return False
+        
+        # Check for dangerous patterns
+        for pattern in self.DANGEROUS_PATTERNS:
+            if re.search(pattern, id_string):
+                return False
+        
+        # Basic UUID format validation (optional but recommended)
+        import uuid
+        try:
+            uuid.UUID(id_string)
+            return True
+        except ValueError:
+            # If not a UUID, check if it's a safe alphanumeric string
+            return re.match(r'^[a-zA-Z0-9_-]+$', id_string) is not None
+    
     def validate_extension(self, filename: str) -> bool:
         """Validate file extension."""
         extension = Path(filename).suffix.lower()
@@ -132,6 +151,14 @@ class SecurityManager:
                 return False
         
         return True
+    
+    def validate_filename(self, filename: str) -> bool:
+        """Validate filename for security and format."""
+        return self.path_validator.validate_filename(filename)
+    
+    def validate_id(self, id_string: str) -> bool:
+        """Validate ID string for security and format."""
+        return self.path_validator.validate_id(id_string)
     
     def get_secure_file_path(self, relative_path: str, filename: str) -> Optional[Path]:
         """Get a secure file path for the given relative path and filename."""
@@ -209,3 +236,7 @@ class SecurityManager:
             }
         except OSError:
             return None
+
+
+# Alias for backward compatibility
+SecurityValidator = SecurityManager

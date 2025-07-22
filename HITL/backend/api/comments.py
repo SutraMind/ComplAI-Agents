@@ -7,8 +7,7 @@ from . import api_bp
 from ..services.comment_service import CommentService
 
 
-# Initialize comment service
-comment_service = CommentService()
+# Comment service will be instantiated in route handlers
 
 
 @api_bp.route('/comments', methods=['POST'])
@@ -67,6 +66,7 @@ def create_comment():
             }), 400
         
         # Create comment using service
+        comment_service = CommentService()
         comment = comment_service.create_comment(
             report_id=report_id,
             start_position=start_position,
@@ -117,6 +117,7 @@ def get_comment(comment_id):
             }), 400
         
         # Get comment using service
+        comment_service = CommentService()
         comment = comment_service.get_comment(comment_id)
         
         if not comment:
@@ -182,6 +183,7 @@ def update_comment(comment_id):
         comment_text = data['comment_text']
         
         # Update comment using service
+        comment_service = CommentService()
         updated_comment = comment_service.update_comment(comment_id, comment_text)
         
         if not updated_comment:
@@ -224,6 +226,7 @@ def delete_comment(comment_id):
             }), 400
         
         # Delete comment using service
+        comment_service = CommentService()
         success = comment_service.delete_comment(comment_id)
         
         if not success:
@@ -266,6 +269,7 @@ def get_comments_for_report(report_id):
             }), 400
         
         # Get comments using service
+        comment_service = CommentService()
         comments = comment_service.get_comments_for_report(report_id)
         
         # Convert comments to dictionaries
@@ -305,6 +309,7 @@ def get_comments_by_author(author):
             }), 400
         
         # Get comments using service
+        comment_service = CommentService()
         comments = comment_service.get_comments_by_author(author)
         
         # Convert comments to dictionaries

@@ -8,4 +8,4 @@ from flask import Blueprint
 api_bp = Blueprint('api', __name__)
 
 # Import routes to register them with the blueprint
-from . import reports, comments, summaries
+from . import simple_reports

@@ -8,8 +8,7 @@ from . import api_bp
 from ..services.report_service import ReportService
 
 
-# Initialize report service
-report_service = ReportService()
+# Report service will be instantiated in route handlers
 
 
 @api_bp.route('/reports', methods=['GET'])
@@ -21,6 +20,7 @@ def list_reports():
         JSON response with list of reports and metadata
     """
     try:
+        report_service = ReportService()
         reports = report_service.list_reports()
         return jsonify({
             'success': True,
@@ -88,6 +88,7 @@ def create_report():
             }), 400
         
         # Create report using service
+        report_service = ReportService()
         report = report_service.create_report(filename, content)
         
         if not report:
@@ -130,6 +131,7 @@ def get_report(report_id):
             }), 400
         
         # Get report using service
+        report_service = ReportService()
         report = report_service.get_report(report_id)
         
         if not report:
@@ -202,6 +204,7 @@ def update_report(report_id):
             }), 400
         
         # Update report using service
+        report_service = ReportService()
         updated_report = report_service.update_report(report_id, content)
         
         if not updated_report:
@@ -244,6 +247,7 @@ def delete_report(report_id):
             }), 400
         
         # Delete report using service
+        report_service = ReportService()
         success = report_service.delete_report(report_id)
         
         if not success:
@@ -286,6 +290,7 @@ def get_report_sections(report_id):
             }), 400
         
         # Get report sections using service
+        report_service = ReportService()
         sections = report_service.get_report_sections(report_id)
         
         # Convert sections to dictionaries
@@ -332,6 +337,7 @@ def get_report_section(report_id, section_id):
             }), 400
         
         # Get report section using service
+        report_service = ReportService()
         section = report_service.get_report_section(report_id, section_id)
         
         if not section:

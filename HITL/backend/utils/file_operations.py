@@ -128,6 +128,10 @@ class FileManager:
         return self.copy_file(file_path, backup_path)
 
 
+# Alias for backward compatibility
+FileOperations = FileManager
+
+
 class DataPersistence:
     """Handles JSON data persistence with validation and error handling."""
     
