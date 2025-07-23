@@ -479,7 +479,11 @@ class HITLReportEditor {
             throw new Error(`Failed to create comment: ${response.status} ${response.statusText}`);
         }
 
-        const newComment = await response.json();
+        const responseData = await response.json();
+        console.log('Create comment response:', responseData);
+        
+        // Handle API response structure
+        const newComment = responseData.success ? responseData.data : responseData;
         
         // Add to local comments array
         this.comments.push(newComment);
@@ -511,12 +515,21 @@ class HITLReportEditor {
             throw new Error(`Failed to update comment: ${response.status} ${response.statusText}`);
         }
 
-        const updatedComment = await response.json();
+        const responseData = await response.json();
+        console.log('Update comment response:', responseData);
+        
+        // Handle API response structure
+        const updatedComment = responseData.success ? responseData.data : responseData;
         
         // Update local comments array
         const index = this.comments.findIndex(c => c.id === commentId);
         if (index !== -1) {
-            this.comments[index] = updatedComment;
+            // Preserve the original text_selection data when updating
+            this.comments[index] = {
+                ...this.comments[index],
+                ...updatedComment,
+                text_selection: this.comments[index].text_selection
+            };
         }
         
         // Update UI
@@ -649,31 +662,47 @@ class HITLReportEditor {
         }
 
         // Sort comments by position in document
-        const sortedComments = [...this.comments].sort((a, b) => 
-            a.text_selection.start_position - b.text_selection.start_position
-        );
+        const sortedComments = [...this.comments].sort((a, b) => {
+            const aPos = a.text_selection?.start_position || 0;
+            const bPos = b.text_selection?.start_position || 0;
+            return aPos - bPos;
+        });
 
-        commentsList.innerHTML = sortedComments.map(comment => `
-            <div class="comment-item" data-comment-id="${comment.id}">
-                <div class="comment-header">
-                    <div class="comment-author">👤 ${comment.author || 'Expert'}</div>
-                    <div class="comment-timestamp">🕒 ${this.formatDate(comment.timestamp)}</div>
-                    <div class="comment-actions">
-                        <button class="comment-action edit-comment" title="Edit comment">
-                            ✏️
-                        </button>
-                        <button class="comment-action delete-comment" title="Delete comment">
-                            🗑️
-                        </button>
+        // Debug: Log comment structure
+        console.log('Comments data:', sortedComments);
+        
+        commentsList.innerHTML = sortedComments.map(comment => {
+            // Debug: Log individual comment structure
+            console.log('Comment:', comment);
+            console.log('Text selection:', comment.text_selection);
+            
+            // Get selected text safely
+            const selectedText = comment.text_selection?.selected_text || 
+                                comment.selected_text || 
+                                'No text selected';
+            
+            return `
+                <div class="comment-item" data-comment-id="${comment.id}">
+                    <div class="comment-header">
+                        <div class="comment-author">👤 ${comment.author || 'Expert'}</div>
+                        <div class="comment-timestamp">🕒 ${this.formatDate(comment.timestamp)}</div>
+                        <div class="comment-actions">
+                            <button class="comment-action edit-comment" title="Edit comment">
+                                ✏️
+                            </button>
+                            <button class="comment-action delete-comment" title="Delete comment">
+                                🗑️
+                            </button>
+                        </div>
                     </div>
+                    <div class="comment-selected-text">
+                        ${this.escapeHtml(selectedText)}
+                    </div>
+                    <div class="comment-text">${this.escapeHtml(comment.comment_text)}</div>
+                    ${comment.section_context ? `<div class="comment-section">📍 Section: ${comment.section_context}</div>` : ''}
                 </div>
-                <div class="comment-selected-text">
-                    ${this.escapeHtml(comment.text_selection.selected_text)}
-                </div>
-                <div class="comment-text">${this.escapeHtml(comment.comment_text)}</div>
-                ${comment.section_context ? `<div class="comment-section">📍 Section: ${comment.section_context}</div>` : ''}
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         // Bind comment action events
         this.bindCommentActions();
@@ -1383,8 +1412,19 @@ class HITLReportEditor {
                 throw new Error(`Failed to load comments: ${response.status} ${response.statusText}`);
             }
 
-            this.comments = await response.json();
-            console.log(`Loaded ${this.comments.length} comments for report ${reportId}`);
+            const responseData = await response.json();
+            console.log('API Response:', responseData);
+            
+            // Handle API response structure
+            if (responseData.success && responseData.data) {
+                this.comments = responseData.data;
+            } else if (Array.isArray(responseData)) {
+                this.comments = responseData;
+            } else {
+                this.comments = [];
+            }
+            
+            console.log(`Loaded ${this.comments.length} comments for report ${reportId}:`, this.comments);
             
             // Render comments
             this.renderComments();

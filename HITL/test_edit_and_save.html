@@ -83,6 +83,11 @@
         <p>Check if reports are available:</p>
         <button onclick="testListReports()">List Reports</button>
         <div id="reportsResult"></div>
+
+        <h3>4. Debug Comment Structure</h3>
+        <p>Check the structure of existing comments:</p>
+        <button onclick="debugComments()">Debug Comments</button>
+        <div id="debugResult"></div>
     </div>
 
     <div class="test-section success">
@@ -221,6 +226,38 @@
                 } else {
                     resultDiv.innerHTML = `<p style="color: red;">❌ Failed to load reports: ${data.error}</p>`;
                 }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function debugComments() {
+            const resultDiv = document.getElementById('debugResult');
+            resultDiv.innerHTML = '<p>Debugging comments...</p>';
+            
+            try {
+                // Get reports to find a report ID
+                const reportsResponse = await fetch(`${API_BASE}/reports`);
+                const reportsData = await reportsResponse.json();
+                
+                if (!reportsData.success || reportsData.data.length === 0) {
+                    resultDiv.innerHTML = '<p style="color: orange;">⚠️ No reports found.</p>';
+                    return;
+                }
+
+                const reportId = reportsData.data[0].id;
+                
+                // Get comments for the first report
+                const commentsResponse = await fetch(`${API_BASE}/reports/${reportId}/comments`);
+                const commentsData = await commentsResponse.json();
+                
+                resultDiv.innerHTML = `
+                    <h4>📊 Comment Data Structure:</h4>
+                    <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto;">
+${JSON.stringify(commentsData, null, 2)}
+                    </pre>
+                `;
                 
             } catch (error) {
                 resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
