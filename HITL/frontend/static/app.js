@@ -67,6 +67,14 @@ class HITLReportEditor {
                 this.generateSummary();
             });
         }
+
+        // Save feedback button
+        const saveFeedbackBtn = document.getElementById('saveFeedback');
+        if (saveFeedbackBtn) {
+            saveFeedbackBtn.addEventListener('click', () => {
+                this.saveFeedback();
+            });
+        }
         
         // Auto-save interval (every 30 seconds)
         setInterval(() => {
@@ -478,7 +486,6 @@ class HITLReportEditor {
         
         // Update UI
         this.renderComments();
-        this.highlightCommentedText();
         this.updateCommentCount();
         this.updateGenerateSummaryButton();
         
@@ -544,7 +551,6 @@ class HITLReportEditor {
             
             // Update UI
             this.renderComments();
-            this.highlightCommentedText();
             this.updateCommentCount();
             this.updateGenerateSummaryButton();
             
@@ -553,6 +559,50 @@ class HITLReportEditor {
         } catch (error) {
             console.error('Error deleting comment:', error);
             this.showToast(`Error deleting comment: ${error.message}`, 'error');
+        } finally {
+            this.showLoading(false);
+        }
+    }
+
+    // Save feedback file with report and comments
+    async saveFeedback() {
+        if (!this.currentReport) {
+            this.showToast('Please select a report first', 'warning');
+            return;
+        }
+
+        if (this.comments.length === 0) {
+            this.showToast('No comments to save. Add some comments first.', 'warning');
+            return;
+        }
+
+        try {
+            this.showLoading(true);
+            this.showToast('Generating feedback file...', 'info');
+
+            const response = await fetch(`${this.apiBaseUrl}/reports/${this.currentReport.id}/feedback`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to save feedback: ${response.status} ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showToast(`Feedback file saved: ${result.data.filename}`, 'success');
+                this.showToast(`${result.data.comments_count} comments included in feedback`, 'info');
+            } else {
+                throw new Error(result.error || 'Failed to save feedback file');
+            }
+
+        } catch (error) {
+            console.error('Error saving feedback:', error);
+            this.showToast(`Error saving feedback: ${error.message}`, 'error');
         } finally {
             this.showLoading(false);
         }
@@ -606,7 +656,8 @@ class HITLReportEditor {
         commentsList.innerHTML = sortedComments.map(comment => `
             <div class="comment-item" data-comment-id="${comment.id}">
                 <div class="comment-header">
-                    <div class="comment-timestamp">${this.formatDate(comment.timestamp)}</div>
+                    <div class="comment-author">👤 ${comment.author || 'Expert'}</div>
+                    <div class="comment-timestamp">🕒 ${this.formatDate(comment.timestamp)}</div>
                     <div class="comment-actions">
                         <button class="comment-action edit-comment" title="Edit comment">
                             ✏️
@@ -617,10 +668,10 @@ class HITLReportEditor {
                     </div>
                 </div>
                 <div class="comment-selected-text">
-                    "${comment.text_selection.selected_text}"
+                    ${this.escapeHtml(comment.text_selection.selected_text)}
                 </div>
                 <div class="comment-text">${this.escapeHtml(comment.comment_text)}</div>
-                ${comment.section_context ? `<div class="comment-section">Section: ${comment.section_context}</div>` : ''}
+                ${comment.section_context ? `<div class="comment-section">📍 Section: ${comment.section_context}</div>` : ''}
             </div>
         `).join('');
 
@@ -884,13 +935,18 @@ class HITLReportEditor {
     updateCommentCount() {
         const commentCount = document.getElementById('commentCount');
         const clearCommentsBtn = document.getElementById('clearCommentsBtn');
+        const saveFeedbackBtn = document.getElementById('saveFeedback');
         
         if (commentCount) {
-            commentCount.textContent = this.comments.length;
+            commentCount.textContent = `${this.comments.length} comment${this.comments.length !== 1 ? 's' : ''}`;
         }
         
         if (clearCommentsBtn) {
             clearCommentsBtn.disabled = this.comments.length === 0;
+        }
+
+        if (saveFeedbackBtn) {
+            saveFeedbackBtn.disabled = this.comments.length === 0;
         }
     }
 
@@ -917,7 +973,6 @@ class HITLReportEditor {
             
             // Update UI
             this.renderComments();
-            this.clearTextHighlights();
             this.updateCommentCount();
             
             this.showToast('All comments deleted successfully', 'success');
@@ -1331,9 +1386,8 @@ class HITLReportEditor {
             this.comments = await response.json();
             console.log(`Loaded ${this.comments.length} comments for report ${reportId}`);
             
-            // Render comments and highlights
+            // Render comments
             this.renderComments();
-            this.highlightCommentedText();
             this.updateCommentCount();
             
         } catch (error) {

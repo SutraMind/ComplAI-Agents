@@ -2,6 +2,7 @@
 Report management API endpoints for the HITL Report Editor.
 """
 
+from datetime import datetime
 from flask import request, jsonify, current_app
 from werkzeug.utils import secure_filename
 from . import api_bp
@@ -356,4 +357,98 @@ def get_report_section(report_id, section_id):
         return jsonify({
             'success': False,
             'error': 'Failed to retrieve report section'
+        }), 500
+
+
+@api_bp.route('/reports/<report_id>/feedback', methods=['POST'])
+def save_feedback_file(report_id):
+    """
+    Save a comprehensive feedback file containing the report and all comments.
+    
+    Args:
+        report_id: Unique identifier of the report
+        
+    Returns:
+        JSON response with feedback file information
+    """
+    try:
+        # Validate report ID
+        if not report_id or not report_id.strip():
+            return jsonify({
+                'success': False,
+                'error': 'Invalid report ID'
+            }), 400
+        
+        # Get report using service
+        report_service = ReportService()
+        report = report_service.get_report(report_id)
+        
+        if not report:
+            return jsonify({
+                'success': False,
+                'error': 'Report not found'
+            }), 404
+        
+        # Get comments using service
+        from ..services.comment_service import CommentService
+        comment_service = CommentService()
+        comments = comment_service.get_comments_for_report(report_id)
+        
+        # Generate feedback content
+        feedback_content = f"FEEDBACK REPORT\n"
+        feedback_content += f"================\n\n"
+        feedback_content += f"Report: {report.filename}\n"
+        feedback_content += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        feedback_content += f"Total Comments: {len(comments)}\n\n"
+        
+        feedback_content += f"ORIGINAL REPORT CONTENT\n"
+        feedback_content += f"=======================\n\n"
+        feedback_content += report.content + '\n\n'
+        
+        feedback_content += f"EXPERT COMMENTS\n"
+        feedback_content += f"===============\n\n"
+        
+        # Sort comments by position
+        sorted_comments = sorted(comments, key=lambda c: c.text_selection.start_position)
+        
+        for i, comment in enumerate(sorted_comments, 1):
+            feedback_content += f"Comment {i}:\n"
+            feedback_content += f"Author: {comment.author}\n"
+            feedback_content += f"Time: {comment.timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            feedback_content += f"Selected Text: \"{comment.text_selection.selected_text}\"\n"
+            feedback_content += f"Comment: {comment.comment_text}\n"
+            if comment.section_context:
+                feedback_content += f"Section: {comment.section_context}\n"
+            feedback_content += f"\n{'=' * 50}\n\n"
+        
+        # Save feedback file
+        from pathlib import Path
+        feedback_dir = Path(current_app.config.get('FEEDBACK_DIR', 'data/feedback'))
+        feedback_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate filename
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"feedback_{report.filename.replace('.txt', '')}_{timestamp}.txt"
+        feedback_file = feedback_dir / filename
+        
+        # Write feedback file
+        with open(feedback_file, 'w', encoding='utf-8') as f:
+            f.write(feedback_content)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'filename': filename,
+                'filepath': str(feedback_file),
+                'size': len(feedback_content),
+                'comments_count': len(comments)
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error saving feedback file for report {report_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to save feedback file'
         }), 500

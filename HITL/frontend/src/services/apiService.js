@@ -109,6 +109,11 @@ const apiService = {
     return await api.get(`/reports/${reportId}/summary/export`);
   },
 
+  // Feedback
+  async saveFeedbackFile(reportId) {
+    return await api.post(`/reports/${reportId}/feedback`);
+  },
+
   // Health check
   async healthCheck() {
     return await api.get('/health');

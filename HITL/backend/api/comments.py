@@ -10,8 +10,8 @@ from ..services.comment_service import CommentService
 # Comment service will be instantiated in route handlers
 
 
-@api_bp.route('/comments', methods=['POST'])
-def create_comment():
+@api_bp.route('/reports/<report_id>/comments', methods=['POST'])
+def create_comment(report_id):
     """
     Create a new comment on a report.
     
@@ -39,9 +39,15 @@ def create_comment():
         
         data = request.get_json()
         
-        # Validate required fields
-        required_fields = ['report_id', 'start_position', 'end_position', 
-                          'selected_text', 'comment_text', 'author']
+        # Validate report ID from URL
+        if not report_id or not report_id.strip():
+            return jsonify({
+                'success': False,
+                'error': 'Invalid report ID'
+            }), 400
+        
+        # Validate required fields - handle both nested and flat structures
+        required_fields = ['text_selection', 'comment_text', 'author']
         
         if not data or not all(field in data for field in required_fields):
             return jsonify({
@@ -50,10 +56,24 @@ def create_comment():
             }), 400
         
         # Extract and validate data
-        report_id = data['report_id']
-        start_position = data['start_position']
-        end_position = data['end_position']
-        selected_text = data['selected_text']
+        text_selection = data['text_selection']
+        if not isinstance(text_selection, dict):
+            return jsonify({
+                'success': False,
+                'error': 'text_selection must be an object'
+            }), 400
+        
+        # Validate text_selection fields
+        selection_fields = ['start_position', 'end_position', 'selected_text']
+        if not all(field in text_selection for field in selection_fields):
+            return jsonify({
+                'success': False,
+                'error': f'Missing text_selection fields: {", ".join(selection_fields)}'
+            }), 400
+        
+        start_position = text_selection['start_position']
+        end_position = text_selection['end_position']
+        selected_text = text_selection['selected_text']
         comment_text = data['comment_text']
         author = data['author']
         section_context = data.get('section_context', '')

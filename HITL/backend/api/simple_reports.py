@@ -746,6 +746,150 @@ def update_comment(comment_id):
             'operation_id': operation_id
         }), 500
 
+
+@api_bp.route('/reports/<report_id>/feedback', methods=['POST'])
+def save_feedback_file(report_id):
+    """
+    Save a comprehensive feedback file containing the report and all comments.
+    
+    Args:
+        report_id: Unique identifier of the report
+        
+    Returns:
+        JSON response with feedback file information
+    """
+    operation_id = str(uuid.uuid4())[:8]
+    current_app.logger.info(f"[{operation_id}] Starting save_feedback_file for report_id: {report_id}")
+    
+    try:
+        # Input validation
+        if not report_id or not report_id.strip():
+            current_app.logger.warning(f"[{operation_id}] Invalid report_id provided: '{report_id}'")
+            raise ValidationError("Report ID cannot be empty")
+        
+        # Sanitize report_id
+        if '..' in report_id or '/' in report_id or '\\' in report_id:
+            current_app.logger.warning(f"[{operation_id}] Potentially malicious report_id: {report_id}")
+            raise ValidationError("Invalid report ID format")
+        
+        # Get report
+        reports_dir = Path(current_app.config.get('REPORTS_DIR', 'data/reports'))
+        report_file = reports_dir / f"{report_id}.txt"
+        
+        if not report_file.exists():
+            current_app.logger.warning(f"[{operation_id}] Report file not found: {report_file}")
+            raise ReportNotFoundError(f"Report '{report_id}' not found")
+        
+        try:
+            report_content = report_file.read_text(encoding='utf-8')
+            current_app.logger.debug(f"[{operation_id}] Successfully read report content ({len(report_content)} characters)")
+        except Exception as e:
+            current_app.logger.error(f"[{operation_id}] Error reading report: {e}")
+            raise FileOperationError("Failed to read report file")
+        
+        # Get comments
+        comments_dir = Path(current_app.config.get('COMMENTS_DIR', 'data/comments'))
+        comments_file = comments_dir / f"{report_id}.json"
+        
+        comments = []
+        if comments_file.exists():
+            try:
+                import json
+                with open(comments_file, 'r', encoding='utf-8') as f:
+                    comments = json.load(f)
+                current_app.logger.debug(f"[{operation_id}] Successfully loaded {len(comments)} comments")
+            except Exception as e:
+                current_app.logger.error(f"[{operation_id}] Error reading comments: {e}")
+                # Continue with empty comments rather than failing
+                comments = []
+        
+        # Generate feedback content
+        feedback_content = f"FEEDBACK REPORT\n"
+        feedback_content += f"================\n\n"
+        feedback_content += f"Report: {report_file.name}\n"
+        feedback_content += f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        feedback_content += f"Total Comments: {len(comments)}\n\n"
+        
+        feedback_content += f"ORIGINAL REPORT CONTENT\n"
+        feedback_content += f"=======================\n\n"
+        feedback_content += report_content + '\n\n'
+        
+        feedback_content += f"EXPERT COMMENTS\n"
+        feedback_content += f"===============\n\n"
+        
+        # Sort comments by position
+        sorted_comments = sorted(comments, key=lambda c: c.get('text_selection', {}).get('start_position', 0))
+        
+        for i, comment in enumerate(sorted_comments, 1):
+            feedback_content += f"Comment {i}:\n"
+            feedback_content += f"Author: {comment.get('author', 'Unknown')}\n"
+            feedback_content += f"Time: {comment.get('timestamp', 'Unknown')}\n"
+            
+            text_selection = comment.get('text_selection', {})
+            selected_text = text_selection.get('selected_text', 'N/A')
+            feedback_content += f"Selected Text: \"{selected_text}\"\n"
+            feedback_content += f"Comment: {comment.get('comment_text', '')}\n"
+            
+            section_context = comment.get('section_context', '')
+            if section_context:
+                feedback_content += f"Section: {section_context}\n"
+            feedback_content += f"\n{'=' * 50}\n\n"
+        
+        # Save feedback file
+        feedback_dir = Path(current_app.config.get('FEEDBACK_DIR', 'data/feedback'))
+        feedback_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"feedback_{report_id}_{timestamp}.txt"
+        feedback_file = feedback_dir / filename
+        
+        # Write feedback file
+        try:
+            with open(feedback_file, 'w', encoding='utf-8') as f:
+                f.write(feedback_content)
+            current_app.logger.info(f"[{operation_id}] Successfully saved feedback file: {feedback_file}")
+        except Exception as e:
+            current_app.logger.error(f"[{operation_id}] Error writing feedback file: {e}")
+            raise FileOperationError("Failed to save feedback file")
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'filename': filename,
+                'filepath': str(feedback_file),
+                'size': len(feedback_content),
+                'comments_count': len(comments)
+            },
+            'operation_id': operation_id
+        }), 200
+        
+    except (ValidationError, ReportNotFoundError) as e:
+        current_app.logger.warning(f"[{operation_id}] Client error in save_feedback_file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'operation_id': operation_id
+        }), 404 if isinstance(e, ReportNotFoundError) else 400
+        
+    except FileOperationError as e:
+        current_app.logger.error(f"[{operation_id}] File operation error in save_feedback_file: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'operation_id': operation_id
+        }), 500
+        
+    except Exception as e:
+        current_app.logger.error(f"[{operation_id}] Unexpected error in save_feedback_file: {e}")
+        current_app.logger.debug(f"[{operation_id}] Traceback: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to save feedback file',
+            'details': str(e) if current_app.debug else 'Internal server error',
+            'operation_id': operation_id
+        }), 500
+
 @api_bp.route('/comments/<comment_id>', methods=['DELETE'])
 def delete_comment(comment_id):
     """Delete a specific comment."""

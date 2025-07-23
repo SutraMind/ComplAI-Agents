@@ -18,6 +18,7 @@ class Config:
     REPORTS_DIR = DATA_DIR / 'reports'
     COMMENTS_DIR = DATA_DIR / 'comments'
     SUMMARIES_DIR = DATA_DIR / 'summaries'
+    FEEDBACK_DIR = DATA_DIR / 'feedback'
     LOGS_DIR = BASE_DIR / 'logs'
     
     # Ollama server configuration
@@ -49,6 +50,7 @@ class Config:
             Config.REPORTS_DIR,
             Config.COMMENTS_DIR,
             Config.SUMMARIES_DIR,
+            Config.FEEDBACK_DIR,
             Config.LOGS_DIR
         ]
         
@@ -155,6 +157,7 @@ class TestingConfig(Config):
     REPORTS_DIR = DATA_DIR / 'reports'
     COMMENTS_DIR = DATA_DIR / 'comments'
     SUMMARIES_DIR = DATA_DIR / 'summaries'
+    FEEDBACK_DIR = DATA_DIR / 'feedback'
     
     # Disable CSRF for testing
     WTF_CSRF_ENABLED = False

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Edit and Save Functionality</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 HITL Edit and Save Functionality Test</h1>
+    
+    <div class="test-section info">
+        <h2>Test Instructions</h2>
+        <ol>
+            <li>Make sure the HITL server is running on <code>http://localhost:5000</code></li>
+            <li>Open the main application in another tab</li>
+            <li>Load a report and add some comments</li>
+            <li>Try editing a comment - it should work now (no more "coming soon" message)</li>
+            <li>Try clicking the "Save Feedback" button - it should generate a feedback file</li>
+            <li>Use the buttons below to test the API endpoints directly</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>🔧 API Tests</h2>
+        
+        <h3>1. Test Update Comment API</h3>
+        <p>This will test the comment editing functionality:</p>
+        <button onclick="testUpdateComment()">Test Update Comment</button>
+        <div id="updateResult"></div>
+
+        <h3>2. Test Save Feedback API</h3>
+        <p>This will test the save feedback functionality:</p>
+        <button onclick="testSaveFeedback()">Test Save Feedback</button>
+        <div id="saveResult"></div>
+
+        <h3>3. Test List Reports</h3>
+        <p>Check if reports are available:</p>
+        <button onclick="testListReports()">List Reports</button>
+        <div id="reportsResult"></div>
+    </div>
+
+    <div class="test-section success">
+        <h2>✅ Expected Results</h2>
+        <ul>
+            <li><strong>Edit Comment:</strong> Should update comment text successfully</li>
+            <li><strong>Save Feedback:</strong> Should generate a feedback file with report content and comments</li>
+            <li><strong>No "Coming Soon" Messages:</strong> Edit functionality should work properly</li>
+            <li><strong>Selected Text Display:</strong> Comments should show the highlighted text in the right panel</li>
+            <li><strong>Clean Report View:</strong> Left side should show clean report text without highlights</li>
+        </ul>
+    </div>
+
+    <div class="test-section info">
+        <h2>🎯 UI Changes Made</h2>
+        <ul>
+            <li><strong>Right Panel:</strong> Comments now display the selected text with clear formatting</li>
+            <li><strong>Left Panel:</strong> Report text is clean without overlapping highlights</li>
+            <li><strong>Comment Structure:</strong> Each comment shows author, timestamp, selected text, and comment</li>
+            <li><strong>Visual Improvements:</strong> Better styling for selected text and comments</li>
+        </ul>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5000/api';
+
+        async function testUpdateComment() {
+            const resultDiv = document.getElementById('updateResult');
+            resultDiv.innerHTML = '<p>Testing update comment...</p>';
+            
+            try {
+                // First, get reports to find a report ID
+                const reportsResponse = await fetch(`${API_BASE}/reports`);
+                const reportsData = await reportsResponse.json();
+                
+                if (!reportsData.success || reportsData.data.length === 0) {
+                    resultDiv.innerHTML = '<p style="color: orange;">⚠️ No reports found. Please add a report first.</p>';
+                    return;
+                }
+
+                const reportId = reportsData.data[0].id;
+                
+                // Get comments for the first report
+                const commentsResponse = await fetch(`${API_BASE}/reports/${reportId}/comments`);
+                const commentsData = await commentsResponse.json();
+                
+                if (!commentsData.success || commentsData.data.length === 0) {
+                    resultDiv.innerHTML = '<p style="color: orange;">⚠️ No comments found. Please add a comment first.</p>';
+                    return;
+                }
+
+                const commentId = commentsData.data[0].id;
+                const originalText = commentsData.data[0].comment_text;
+                
+                // Update the comment
+                const updateResponse = await fetch(`${API_BASE}/comments/${commentId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        comment_text: `${originalText} [EDITED via test]`
+                    })
+                });
+
+                const updateData = await updateResponse.json();
+                
+                if (updateData.success) {
+                    resultDiv.innerHTML = '<p style="color: green;">✅ Comment updated successfully!</p>';
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">❌ Failed to update comment: ${updateData.error}</p>`;
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testSaveFeedback() {
+            const resultDiv = document.getElementById('saveResult');
+            resultDiv.innerHTML = '<p>Testing save feedback...</p>';
+            
+            try {
+                // Get reports to find a report ID
+                const reportsResponse = await fetch(`${API_BASE}/reports`);
+                const reportsData = await reportsResponse.json();
+                
+                if (!reportsData.success || reportsData.data.length === 0) {
+                    resultDiv.innerHTML = '<p style="color: orange;">⚠️ No reports found. Please add a report first.</p>';
+                    return;
+                }
+
+                const reportId = reportsData.data[0].id;
+                
+                // Test save feedback
+                const saveResponse = await fetch(`${API_BASE}/reports/${reportId}/feedback`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const saveData = await saveResponse.json();
+                
+                if (saveData.success) {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">✅ Feedback saved successfully!</p>
+                        <p><strong>Filename:</strong> ${saveData.data.filename}</p>
+                        <p><strong>Comments:</strong> ${saveData.data.comments_count}</p>
+                        <p><strong>Size:</strong> ${saveData.data.size} bytes</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">❌ Failed to save feedback: ${saveData.error}</p>`;
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        async function testListReports() {
+            const resultDiv = document.getElementById('reportsResult');
+            resultDiv.innerHTML = '<p>Loading reports...</p>';
+            
+            try {
+                const response = await fetch(`${API_BASE}/reports`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <p style="color: green;">✅ Found ${data.data.length} reports:</p>
+                        <ul>
+                            ${data.data.map(report => `<li><strong>${report.filename}</strong> (ID: ${report.id})</li>`).join('')}
+                        </ul>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p style="color: red;">❌ Failed to load reports: ${data.error}</p>`;
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `<p style="color: red;">❌ Error: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            setTimeout(testListReports, 1000);
+        });
+    </script>
+</body>
+</html>

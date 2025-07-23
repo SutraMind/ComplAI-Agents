@@ -180,51 +180,15 @@ function App() {
                 return;
             }
 
-            // Create feedback content
-            let feedbackContent = `FEEDBACK REPORT\n`;
-            feedbackContent += `================\n\n`;
-            feedbackContent += `Report: ${currentReport.filename}\n`;
-            feedbackContent += `Generated: ${new Date().toLocaleString()}\n`;
-            feedbackContent += `Total Comments: ${comments.length}\n\n`;
+            // Call backend API to save feedback file
+            const response = await apiService.saveFeedbackFile(selectedReport);
             
-            feedbackContent += `ORIGINAL REPORT CONTENT\n`;
-            feedbackContent += `=======================\n\n`;
-            feedbackContent += currentReport.content + '\n\n';
-            
-            feedbackContent += `EXPERT COMMENTS\n`;
-            feedbackContent += `===============\n\n`;
-            
-            // Sort comments by position
-            const sortedComments = [...comments].sort((a, b) => {
-                const aPos = a.text_selection?.start_position || 0;
-                const bPos = b.text_selection?.start_position || 0;
-                return aPos - bPos;
-            });
-
-            sortedComments.forEach((comment, index) => {
-                feedbackContent += `Comment ${index + 1}:\n`;
-                feedbackContent += `Author: ${comment.author}\n`;
-                feedbackContent += `Time: ${new Date(comment.timestamp).toLocaleString()}\n`;
-                feedbackContent += `Selected Text: "${comment.text_selection?.selected_text || 'N/A'}"\n`;
-                feedbackContent += `Comment: ${comment.comment_text}\n`;
-                if (comment.section_context) {
-                    feedbackContent += `Section: ${comment.section_context}\n`;
-                }
-                feedbackContent += `\n${'='.repeat(50)}\n\n`;
-            });
-
-            // Create and download the file
-            const blob = new Blob([feedbackContent], { type: 'text/plain' });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `feedback_${currentReport.filename.replace(/\.[^/.]+$/, '')}_${new Date().toISOString().split('T')[0]}.txt`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-
-            toast.success('Feedback file saved successfully!');
+            if (response.success) {
+                toast.success(`Feedback file saved: ${response.data.filename}`);
+                toast.info(`${response.data.comments_count} comments included in feedback`);
+            } else {
+                throw new Error(response.error || 'Failed to save feedback file');
+            }
         } catch (err) {
             console.error('Error saving feedback:', err);
             toast.error('Failed to save feedback file');
