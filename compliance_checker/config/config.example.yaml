@@ -1,0 +1,61 @@
+# Example configuration file for Multi-Agent Compliance Checker
+# Copy this file to config.yaml and modify as needed
+
+ollama:
+  base_url: "http://localhost:11434"
+  timeout: 30
+  max_retries: 3
+  retry_delay: 1.0
+  retry_backoff_factor: 2.0
+  
+  # Model assignments for different agents
+  cc_agent_1_model: "deepseek-r1:8b"
+  cc_agent_2_model: "Gemma3:27b"
+  ra_agent_model: "qwq:32b"
+  
+  # Model-specific settings
+  model_settings:
+    "deepseek-r1:8b":
+      temperature: 0.1
+      top_p: 0.9
+      max_tokens: 4096
+    "Gemma3:27b":
+      temperature: 0.2
+      top_p: 0.85
+      max_tokens: 4096
+    "qwq:32b":
+      temperature: 0.1
+      top_p: 0.9
+      max_tokens: 8192
+
+vector_store:
+  gdpr_docs_path: "GDPR_docs"
+  index_path: "gdpr_index"
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  chunk_size: 512
+  chunk_overlap: 50
+  top_k_results: 5
+  similarity_threshold: 0.7
+
+processing:
+  supported_formats: [".pdf", ".doc", ".docx", ".txt"]
+  max_file_size_mb: 50
+  temp_dir: "temp"
+  output_dir: "output"
+  max_reasoning_steps: 10
+  reasoning_temperature: 0.1
+
+agents:
+  max_feedback_iterations: 3
+  concurrent_cc_agents: true
+  agent_timeout: 300  # 5 minutes
+  min_confidence_threshold: 0.6
+  high_confidence_threshold: 0.8
+  max_findings_per_report: 100
+  include_reasoning_in_report: true
+
+# System settings
+log_level: "INFO"
+log_file: "compliance_checker.log"
+enable_input_validation: true
+max_concurrent_analyses: 5
