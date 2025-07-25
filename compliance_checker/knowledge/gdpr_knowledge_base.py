@@ -25,6 +25,15 @@ except ImportError:
 from ..models.gdpr import GDPRArticle, GDPRRecital, GDPRKnowledgeEntry
 from ..exceptions import VectorStoreError, DocumentProcessingError
 
+# Import new chunking module
+try:
+    from ..processors.chunking import ChunkingFactory, Chunk
+    from ..processors.reranking import RerankerFactory, RetrievedDocument
+    CHUNKING_AVAILABLE = True
+except ImportError:
+    CHUNKING_AVAILABLE = False
+    Chunk = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +42,17 @@ class GDPRKnowledgeBase:
     """
     GDPR Knowledge Base that processes documents from GDPR_docs folder using LangChain
     and provides FAISS vector storage for similarity search.
+    
+    Now supports modular chunking and optional reranking.
     """
     
     def __init__(self, gdpr_docs_path: str = "policies", 
                  index_path: str = "gdpr_index",
-                 embedding_model: str = "all-MiniLM-L6-v2"):
+                 embedding_model: str = "all-MiniLM-L6-v2",
+                 chunking_strategy: str = "recursive",
+                 use_reranking: bool = False,
+                 reranking_strategy: str = "none",
+                 llm_client=None):
         """
         Initialize GDPR Knowledge Base.
         
@@ -45,10 +60,20 @@ class GDPRKnowledgeBase:
             gdpr_docs_path: Path to folder containing GDPR documents
             index_path: Path to store FAISS index and metadata
             embedding_model: Sentence transformer model for embeddings
+            chunking_strategy: Chunking strategy ('fixed', 'semantic', 'recursive', 'agentic')
+            use_reranking: Whether to use reranking
+            reranking_strategy: Reranking strategy ('none', 'bm25', 'cross_encoder', 'rrf')
+            llm_client: LLM client for agentic chunking
         """
         self.gdpr_docs_path = Path(gdpr_docs_path)
         self.index_path = Path(index_path)
         self.embedding_model_name = embedding_model
+        
+        # Chunking and reranking configuration
+        self.chunking_strategy = chunking_strategy
+        self.use_reranking = use_reranking
+        self.reranking_strategy = reranking_strategy
+        self.llm_client = llm_client
         
         # Initialize components
         self.embedding_model = None
@@ -57,7 +82,28 @@ class GDPRKnowledgeBase:
         self.articles: Dict[str, GDPRArticle] = {}
         self.recitals: Dict[str, GDPRRecital] = {}
         
-        # Text splitter for chunking documents
+        # Initialize chunker
+        self.chunker = None
+        if CHUNKING_AVAILABLE:
+            try:
+                chunker_kwargs = {}
+                if chunking_strategy == 'agentic':
+                    chunker_kwargs['llm_client'] = llm_client
+                self.chunker = ChunkingFactory.create(chunking_strategy, **chunker_kwargs)
+                logger.info(f"Initialized chunker with strategy: {chunking_strategy}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize chunker: {e}, using LangChain splitter")
+        
+        # Initialize reranker
+        self.reranker = None
+        if CHUNKING_AVAILABLE and use_reranking:
+            try:
+                self.reranker = RerankerFactory.create(reranking_strategy)
+                logger.info(f"Initialized reranker with strategy: {reranking_strategy}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize reranker: {e}")
+        
+        # Text splitter for chunking documents (legacy fallback)
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
             chunk_overlap=200,
@@ -469,6 +515,35 @@ class GDPRKnowledgeBase:
                     if len(articles) >= top_k:
                         break
             
+            # Apply reranking if enabled
+            if self.use_reranking and self.reranker and CHUNKING_AVAILABLE:
+                # Convert to RetrievedDocument format for reranking
+                retrieved_docs = []
+                for article in articles:
+                    retrieved_docs.append(RetrievedDocument(
+                        content=article.content,
+                        score=getattr(article, 'relevance_score', 0.5),
+                        metadata={
+                            'article_number': article.article_number,
+                            'title': article.title,
+                            'keywords': article.keywords
+                        }
+                    ))
+                
+                # Rerank
+                reranked = self.reranker.rerank(query, retrieved_docs, top_k=top_k)
+                
+                # Convert back to articles
+                reranked_articles = []
+                for doc in reranked:
+                    article_num = doc.metadata.get('article_number')
+                    if article_num and article_num in self.articles:
+                        article = self.articles[article_num]
+                        article.relevance_score = doc.rerank_score
+                        reranked_articles.append(article)
+                
+                articles = reranked_articles
+            
             logger.info(f"Found {len(articles)} relevant articles for query: {query[:50]}...")
             return articles
             
@@ -502,6 +577,26 @@ class GDPRKnowledgeBase:
                 if idx < len(self.knowledge_entries):
                     entry = self.knowledge_entries[idx]
                     results.append((entry, float(score)))
+            
+            # Apply reranking if enabled
+            if self.use_reranking and self.reranker and CHUNKING_AVAILABLE and results:
+                # Convert to RetrievedDocument format
+                retrieved_docs = []
+                for entry, score in results:
+                    retrieved_docs.append(RetrievedDocument(
+                        content=entry.content,
+                        score=score,
+                        metadata=entry.metadata
+                    ))
+                
+                # Rerank
+                reranked = self.reranker.rerank(query, retrieved_docs, top_k=top_k)
+                
+                # Convert back
+                results = []
+                for doc in reranked:
+                    entry = self.knowledge_entries[doc.metadata.get('entry_id', '')]
+                    results.append((entry, doc.rerank_score))
             
             logger.info(f"Similarity search returned {len(results)} results")
             return results
@@ -579,10 +674,58 @@ class GDPRKnowledgeBase:
         Returns:
             Dictionary with knowledge base statistics
         """
-        return {
+        stats = {
             'total_entries': len(self.knowledge_entries),
             'total_articles': len(self.articles),
             'total_recitals': len(self.recitals),
             'index_size': self.faiss_index.ntotal if self.faiss_index else 0,
-            'embedding_dimension': self.faiss_index.d if self.faiss_index else 0
+            'embedding_dimension': self.faiss_index.d if self.faiss_index else 0,
+            'chunking_strategy': self.chunking_strategy if CHUNKING_AVAILABLE else 'langchain',
+            'use_reranking': self.use_reranking,
+            'reranking_strategy': self.reranking_strategy if CHUNKING_AVAILABLE else 'none'
         }
+        return stats
+    
+    def set_chunking_strategy(self, strategy: str, llm_client=None) -> None:
+        """
+        Change the chunking strategy at runtime.
+        
+        Args:
+            strategy: Chunking strategy ('fixed', 'semantic', 'recursive', 'agentic')
+            llm_client: LLM client (required for 'agentic')
+        """
+        if not CHUNKING_AVAILABLE:
+            logger.warning("Chunking module not available")
+            return
+        
+        self.chunking_strategy = strategy
+        try:
+            chunker_kwargs = {}
+            if strategy == 'agentic':
+                chunker_kwargs['llm_client'] = llm_client or self.llm_client
+            self.chunker = ChunkingFactory.create(strategy, **chunker_kwargs)
+            logger.info(f"Changed chunking strategy to: {strategy}")
+        except Exception as e:
+            logger.error(f"Failed to change chunking strategy: {e}")
+    
+    def set_reranking(self, enabled: bool, strategy: str = 'none') -> None:
+        """
+        Enable or disable reranking at runtime.
+        
+        Args:
+            enabled: Whether to enable reranking
+            strategy: Reranking strategy ('none', 'bm25', 'cross_encoder', 'rrf')
+        """
+        if not CHUNKING_AVAILABLE:
+            logger.warning("Reranking module not available")
+            return
+        
+        self.use_reranking = enabled
+        self.reranking_strategy = strategy
+        
+        try:
+            self.reranker = RerankerFactory.create(strategy) if enabled else None
+            logger.info(f"Reranking {'enabled' if enabled else 'disabled'}" + 
+                       (f" with strategy: {strategy}" if enabled else ""))
+        except Exception as e:
+            logger.error(f"Failed to set reranking: {e}")
