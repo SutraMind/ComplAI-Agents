@@ -2,319 +2,266 @@
 """
 Demo script for RA_Agent (Report Assessor Agent) functionality.
 
-This script demonstrates the RA_Agent's capabilities including:
-- Report assessment and consolidation
-- Conflict resolution between CC_Agent reports
-- Feedback generation for CC_Agents
-- Confidence scoring and overall status generation
+This script demonstrates the key capabilities of the RA_Agent:
+1. Report assessment and consolidation
+2. Conflict resolution between CC_Agent reports
+3. Confidence scoring for final reports
+4. Feedback generation for CC_Agents
 """
 
 import sys
-import os
 import logging
-from datetime import datetime
 from typing import List
+from unittest.mock import Mock
 
-# Add the project root to the Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Add the project root to the path
+sys.path.append('.')
 
 from compliance_checker.agents.ra_agent import RAAgent
-from compliance_checker.llm.multi_agent_client import MultiAgentLLMClient
 from compliance_checker.models.report import (
     ComplianceReport, ComplianceFinding, ComplianceStatus, SeverityLevel
 )
+from compliance_checker.llm.multi_agent_client import (
+    MultiAgentLLMClient, ChainOfThoughtResponse
+)
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-def create_sample_reports() -> List[ComplianceReport]:
-    """Create sample compliance reports for demonstration."""
+def create_mock_llm_client():
+    """Create a mock LLM client for demonstration."""
+    client = Mock(spec=MultiAgentLLMClient)
+    client.verify_model_availability.return_value = {"qwq:32b": True}
+    client.generate.return_value = Mock(success=True, content="Test response", error=None)
     
-    # Create conflicting findings for the same requirement
-    finding1_auth = ComplianceFinding(
+    # Mock chain-of-thought responses for conflict resolution
+    def mock_cot_response(prompt, agent_type, system_prompt=None, temperature=0.2):
+        if "CONFLICT RESOLUTION" in prompt:
+            return ChainOfThoughtResponse(
+                reasoning_steps=[
+                    "Analyzed conflicting findings from different agents",
+                    "Evaluated evidence quality and GDPR article references",
+                    "Applied conservative resolution strategy",
+                    "Determined most restrictive assessment is appropriate",
+                    "Generated consolidated reasoning and recommendations"
+                ],
+                conclusion='{"resolved_finding": {"compliance_status": "non_compliant", "severity": "high", "gdpr_articles": ["Article 32", "Article 25"], "consolidated_reasoning": "After careful analysis of both assessments, the authentication system lacks critical security measures required by GDPR Article 32. While basic authentication exists, the absence of multi-factor authentication and proper password policies creates significant compliance risks.", "recommendations": ["Implement multi-factor authentication immediately", "Establish strong password policies", "Add account lockout mechanisms", "Conduct security audit of authentication system"], "confidence_score": 0.85}}',
+                confidence_score=0.85,
+                raw_response="Conflict resolution analysis complete",
+                model="qwq:32b",
+                success=True
+            )
+        elif "FEEDBACK GENERATION" in prompt:
+            return ChainOfThoughtResponse(
+                reasoning_steps=[
+                    "Analyzed target agent's report quality and thoroughness",
+                    "Compared findings with other agent reports",
+                    "Identified areas for improvement in analysis approach"
+                ],
+                conclusion='{"overall_feedback": "Good analysis with clear reasoning, but could benefit from more comprehensive GDPR article coverage", "improvement_suggestions": ["Include more specific GDPR article references", "Provide more detailed risk assessment", "Consider additional security measures"], "strengths": ["Clear identification of security gaps", "Well-structured reasoning"], "priority_areas": ["gdpr_coverage", "risk_assessment"]}',
+                confidence_score=0.75,
+                raw_response="Feedback generation complete",
+                model="qwq:32b",
+                success=True
+            )
+        else:
+            return ChainOfThoughtResponse(
+                reasoning_steps=["Generic analysis step"],
+                conclusion="Generic conclusion",
+                confidence_score=0.6,
+                raw_response="Generic response",
+                model="qwq:32b",
+                success=True
+            )
+    
+    client.execute_chain_of_thought.side_effect = mock_cot_response
+    return client
+
+
+def create_sample_reports() -> List[ComplianceReport]:
+    """Create sample conflicting compliance reports for demonstration."""
+    
+    # Report 1: More restrictive assessment
+    finding1 = ComplianceFinding(
         requirement_id="REQ_AUTH_001",
-        requirement_text="The system shall implement secure user authentication with multi-factor authentication support",
+        requirement_text="The system shall implement secure user authentication mechanisms compliant with GDPR requirements",
         compliance_status=ComplianceStatus.NON_COMPLIANT,
         gdpr_articles=["Article 32", "Article 25"],
-        reasoning="The authentication system lacks proper multi-factor authentication implementation. Current password-only authentication is insufficient for protecting personal data as required by GDPR Article 32 (Security of processing). The system does not implement data protection by design principles from Article 25.",
-        severity=SeverityLevel.CRITICAL,
+        reasoning="The current authentication system lacks multi-factor authentication and proper password policies. This creates significant security vulnerabilities that violate GDPR Article 32 requirements for appropriate technical measures.",
+        severity=SeverityLevel.HIGH,
         recommendations=[
-            "Implement multi-factor authentication (MFA) for all user accounts",
-            "Add support for hardware security keys",
-            "Implement account lockout mechanisms after failed attempts",
-            "Add audit logging for authentication events"
+            "Implement multi-factor authentication",
+            "Enforce strong password policies with complexity requirements",
+            "Add account lockout mechanisms after failed attempts",
+            "Implement session timeout controls"
         ],
-        confidence_score=0.9,
+        confidence_score=0.88,
         model_used="deepseek-r1:8b"
     )
     
-    finding2_auth = ComplianceFinding(
-        requirement_id="REQ_AUTH_001",
-        requirement_text="The system shall implement secure user authentication with multi-factor authentication support",
-        compliance_status=ComplianceStatus.PARTIALLY_COMPLIANT,
-        gdpr_articles=["Article 32"],
-        reasoning="The authentication system has basic security measures in place including password complexity requirements and session management. However, multi-factor authentication is not fully implemented across all user types. The system partially meets GDPR Article 32 requirements but needs enhancement.",
-        severity=SeverityLevel.HIGH,
-        recommendations=[
-            "Complete MFA implementation for all user roles",
-            "Review and strengthen password policies",
-            "Implement additional security monitoring"
-        ],
-        confidence_score=0.75,
-        model_used="gemma3:27b"
-    )
-    
-    # Create non-conflicting findings
-    finding1_data = ComplianceFinding(
-        requirement_id="REQ_DATA_001",
-        requirement_text="The system shall implement data encryption for personal data at rest and in transit",
-        compliance_status=ComplianceStatus.COMPLIANT,
-        gdpr_articles=["Article 32", "Article 34"],
-        reasoning="The system implements AES-256 encryption for data at rest and TLS 1.3 for data in transit. This meets the technical and organizational measures required by GDPR Article 32 for ensuring appropriate security of personal data.",
-        severity=SeverityLevel.LOW,
-        recommendations=[
-            "Maintain current encryption standards",
-            "Regular security audits of encryption implementation"
-        ],
-        confidence_score=0.85,
-        model_used="deepseek-r1:8b"
-    )
-    
-    finding2_consent = ComplianceFinding(
-        requirement_id="REQ_CONSENT_001",
-        requirement_text="The system shall provide mechanisms for users to give, withdraw, and manage consent for data processing",
-        compliance_status=ComplianceStatus.NON_COMPLIANT,
-        gdpr_articles=["Article 7", "Article 17"],
-        reasoning="The system lacks proper consent management mechanisms. Users cannot easily withdraw consent, and there is no clear audit trail of consent decisions. This violates GDPR Article 7 (Conditions for consent) and Article 17 (Right to erasure).",
-        severity=SeverityLevel.HIGH,
-        recommendations=[
-            "Implement comprehensive consent management system",
-            "Add consent withdrawal mechanisms",
-            "Create audit trail for consent decisions",
-            "Implement data deletion capabilities"
-        ],
-        confidence_score=0.8,
-        model_used="gemma3:27b"
-    )
-    
-    # Create compliance reports
     report1 = ComplianceReport(
         agent_id="cc_agent_1",
         model_used="deepseek-r1:8b",
-        findings=[finding1_auth, finding1_data],
-        overall_assessment="Critical GDPR compliance issues identified. The authentication system requires immediate attention due to lack of multi-factor authentication. Data encryption implementation is compliant.",
-        confidence_score=0.87,
-        document_id="spec_demo_001",
-        document_filename="demo_specification.pdf",
+        findings=[finding1],
+        overall_assessment="Critical GDPR compliance violations identified in authentication system",
+        confidence_score=0.88,
+        document_id="auth_spec_001",
+        document_filename="authentication_requirements.pdf",
         processing_time=18.5,
-        total_requirements_analyzed=15,
-        iteration_number=1,
-        timestamp=datetime.now()
+        total_requirements_analyzed=12,
+        iteration_number=1
+    )
+    
+    # Report 2: More permissive assessment
+    finding2 = ComplianceFinding(
+        requirement_id="REQ_AUTH_001",
+        requirement_text="The system shall implement secure user authentication mechanisms compliant with GDPR requirements",
+        compliance_status=ComplianceStatus.PARTIALLY_COMPLIANT,
+        gdpr_articles=["Article 32"],
+        reasoning="The authentication system has basic security measures in place including password requirements and user account management. While improvements could be made, the current implementation provides a reasonable level of security for GDPR compliance.",
+        severity=SeverityLevel.MEDIUM,
+        recommendations=[
+            "Consider implementing additional security layers",
+            "Review and update password policies periodically",
+            "Monitor authentication logs for suspicious activity"
+        ],
+        confidence_score=0.72,
+        model_used="gemma3:27b"
     )
     
     report2 = ComplianceReport(
         agent_id="cc_agent_2",
         model_used="gemma3:27b",
-        findings=[finding2_auth, finding2_consent],
-        overall_assessment="Mixed GDPR compliance results. Authentication system shows partial compliance but needs improvement. Consent management system requires significant work to meet GDPR requirements.",
-        confidence_score=0.77,
-        document_id="spec_demo_001",
-        document_filename="demo_specification.pdf",
-        processing_time=22.3,
-        total_requirements_analyzed=15,
-        iteration_number=1,
-        timestamp=datetime.now()
+        findings=[finding2],
+        overall_assessment="Partial GDPR compliance with opportunities for enhancement",
+        confidence_score=0.72,
+        document_id="auth_spec_001",
+        document_filename="authentication_requirements.pdf",
+        processing_time=14.2,
+        total_requirements_analyzed=12,
+        iteration_number=1
     )
     
     return [report1, report2]
 
 
 def demonstrate_ra_agent():
-    """Demonstrate RA_Agent functionality."""
-    
+    """Demonstrate RA_Agent capabilities."""
     print("=" * 80)
     print("RA_AGENT (REPORT ASSESSOR AGENT) DEMONSTRATION")
     print("=" * 80)
     
-    try:
-        # Initialize LLM client
-        print("\n1. Initializing Multi-Agent LLM Client...")
-        llm_client = MultiAgentLLMClient()
+    # Initialize RA_Agent
+    print("\n1. INITIALIZING RA_AGENT")
+    print("-" * 40)
+    
+    mock_client = create_mock_llm_client()
+    ra_agent = RAAgent(llm_client=mock_client, agent_id="demo_ra_agent")
+    
+    status = ra_agent.get_status()
+    print(f"Agent ID: {status['agent_id']}")
+    print(f"Model: {status['model_name']}")
+    print(f"Status: {status['status']}")
+    print(f"Conflict Resolution Strategy: {status['conflict_resolution_strategy']}")
+    print(f"Feedback Enabled: {status['feedback_enabled']}")
+    
+    # Create sample reports
+    print("\n2. SAMPLE COMPLIANCE REPORTS")
+    print("-" * 40)
+    
+    reports = create_sample_reports()
+    
+    for i, report in enumerate(reports, 1):
+        print(f"\nReport {i} (Agent: {report.agent_id}):")
+        print(f"  Model: {report.model_used}")
+        print(f"  Overall Assessment: {report.overall_assessment}")
+        print(f"  Confidence: {report.confidence_score:.2f}")
+        print(f"  Findings: {len(report.findings)}")
         
-        # Check model availability
-        print("   Checking model availability...")
-        availability = llm_client.verify_model_availability(["qwq:32b"])
-        if not availability.get("qwq:32b", False):
-            print("   ⚠️  Warning: qwq:32b model not available. Demo will use mock responses.")
-            # Continue with demo using mock client
-        else:
-            print("   ✅ qwq:32b model is available")
+        finding = report.findings[0]
+        print(f"  Finding Status: {finding.compliance_status.value}")
+        print(f"  Severity: {finding.severity.value}")
+        print(f"  GDPR Articles: {', '.join(finding.gdpr_articles)}")
+    
+    # Demonstrate conflict identification
+    print("\n3. CONFLICT IDENTIFICATION")
+    print("-" * 40)
+    
+    conflicts = ra_agent._identify_conflicts(reports)
+    print(f"Conflicts identified: {len(conflicts)}")
+    
+    for conflict in conflicts:
+        print(f"  - {conflict['type']} for requirement {conflict['requirement_id']}")
+        print(f"    Agents: {', '.join(conflict['agents'])}")
+        if conflict['type'] == 'status_conflict':
+            print(f"    Statuses: {', '.join(conflict['statuses'])}")
+        elif conflict['type'] == 'severity_conflict':
+            print(f"    Severities: {', '.join(conflict['severities'])}")
+    
+    # Demonstrate report assessment
+    print("\n4. REPORT ASSESSMENT AND CONSOLIDATION")
+    print("-" * 40)
+    
+    final_report = ra_agent.assess_reports(reports)
+    
+    print(f"Consolidated Findings: {len(final_report.consolidated_findings)}")
+    print(f"Overall Status: {final_report.overall_compliance_status}")
+    print(f"Final Confidence Score: {final_report.confidence_score:.2f}")
+    print(f"Processing Time: {final_report.total_processing_time:.3f}s")
+    print(f"Source Reports: {', '.join(final_report.source_reports)}")
+    
+    print(f"\nConsolidation Notes:")
+    for line in final_report.consolidation_notes.split('\n'):
+        print(f"  {line}")
+    
+    # Show consolidated findings
+    print(f"\nConsolidated Findings:")
+    for finding in final_report.consolidated_findings:
+        print(f"  Requirement: {finding.requirement_id}")
+        print(f"  Status: {finding.compliance_status.value}")
+        print(f"  Severity: {finding.severity.value}")
+        print(f"  Confidence: {finding.confidence_score:.2f}")
+        print(f"  Model Used: {finding.model_used}")
+        print(f"  GDPR Articles: {', '.join(finding.gdpr_articles)}")
+        print(f"  Recommendations: {len(finding.recommendations)} items")
+        print()
+    
+    # Demonstrate feedback generation
+    print("5. FEEDBACK GENERATION")
+    print("-" * 40)
+    
+    feedback_list = ra_agent.generate_feedback(reports)
+    
+    print(f"Feedback generated for {len(feedback_list)} agents:")
+    
+    for feedback in feedback_list:
+        print(f"\nFeedback for {feedback['target_agent_id']}:")
+        print(f"  Type: {feedback['feedback_type']}")
+        print(f"  Iteration: {feedback['iteration_number']}")
+        print(f"  Confidence: {feedback['confidence_score']:.2f}")
+        print(f"  Overall Feedback: {feedback['feedback_text']}")
         
-        # Initialize RA_Agent
-        print("\n2. Initializing RA_Agent...")
-        ra_agent = RAAgent(llm_client=llm_client)
+        if feedback.get('strengths'):
+            print(f"  Strengths: {', '.join(feedback['strengths'])}")
         
-        # Display agent status
-        status = ra_agent.get_status()
-        print(f"   Agent ID: {status['agent_id']}")
-        print(f"   Model: {status['model_name']}")
-        print(f"   Status: {status['status']}")
-        print(f"   Conflict Resolution Strategy: {status['conflict_resolution_strategy']}")
-        print(f"   Feedback Enabled: {status['feedback_enabled']}")
+        if feedback.get('improvement_suggestions'):
+            print(f"  Improvement Suggestions:")
+            for suggestion in feedback['improvement_suggestions']:
+                print(f"    - {suggestion}")
         
-        # Create sample reports
-        print("\n3. Creating Sample Compliance Reports...")
-        reports = create_sample_reports()
-        
-        print(f"   Created {len(reports)} compliance reports:")
-        for report in reports:
-            print(f"   - {report.agent_id} ({report.model_used}): {len(report.findings)} findings")
-            print(f"     Overall Assessment: {report.overall_assessment[:100]}...")
-            print(f"     Confidence: {report.confidence_score:.2f}")
-        
-        # Demonstrate conflict identification
-        print("\n4. Identifying Conflicts Between Reports...")
-        conflicts = ra_agent._identify_conflicts(reports)
-        
-        print(f"   Found {len(conflicts)} conflicts:")
-        for conflict in conflicts:
-            print(f"   - {conflict['type']} in requirement {conflict['requirement_id']}")
-            print(f"     Agents: {', '.join(conflict['agents'])}")
-            if conflict['type'] == 'status_conflict':
-                print(f"     Conflicting statuses: {', '.join(conflict['statuses'])}")
-        
-        # Demonstrate report assessment
-        print("\n5. Performing Report Assessment and Consolidation...")
-        print("   This may take a moment as the RA_Agent processes the reports...")
-        
-        final_report = ra_agent.assess_reports(reports)
-        
-        print(f"   ✅ Assessment completed in {final_report.total_processing_time:.2f} seconds")
-        print(f"   Consolidated {len(final_report.consolidated_findings)} findings")
-        print(f"   Final confidence score: {final_report.confidence_score:.2f}")
-        
-        # Display consolidated findings
-        print("\n6. Consolidated Findings Summary:")
-        print("-" * 60)
-        
-        for i, finding in enumerate(final_report.consolidated_findings, 1):
-            print(f"   Finding {i}: {finding.requirement_id}")
-            print(f"   Status: {finding.compliance_status.value.upper()}")
-            print(f"   Severity: {finding.severity.value.upper()}")
-            print(f"   GDPR Articles: {', '.join(finding.gdpr_articles)}")
-            print(f"   Confidence: {finding.confidence_score:.2f}")
-            print(f"   Reasoning: {finding.reasoning[:150]}...")
-            print(f"   Recommendations: {len(finding.recommendations)} items")
-            print("-" * 60)
-        
-        # Display overall assessment
-        print("\n7. Overall Compliance Assessment:")
-        print(f"   {final_report.overall_compliance_status}")
-        
-        # Display consolidation notes
-        print("\n8. Consolidation Process Notes:")
-        print(f"   {final_report.consolidation_notes}")
-        
-        # Demonstrate feedback generation
-        print("\n9. Generating Feedback for CC_Agents...")
-        feedback_list = ra_agent.generate_feedback(reports)
-        
-        print(f"   Generated feedback for {len(feedback_list)} agents:")
-        for feedback in feedback_list:
-            print(f"\n   Feedback for {feedback['target_agent_id']}:")
-            print(f"   Type: {feedback['feedback_type']}")
-            print(f"   Iteration: {feedback['iteration_number']}")
-            print(f"   Confidence: {feedback['confidence_score']:.2f}")
-            print(f"   Feedback: {feedback['feedback_text'][:200]}...")
-            
-            if feedback.get('improvement_suggestions'):
-                print(f"   Improvement Suggestions:")
-                for suggestion in feedback['improvement_suggestions'][:3]:
-                    print(f"   - {suggestion}")
-            
-            if feedback.get('strengths'):
-                print(f"   Strengths Identified:")
-                for strength in feedback['strengths'][:2]:
-                    print(f"   - {strength}")
-        
-        # Display final statistics
-        print("\n10. Final Statistics:")
-        compliance_summary = final_report.get_compliance_summary()
-        print(f"    Total Findings: {compliance_summary['total_findings']}")
-        print(f"    Non-Compliant: {compliance_summary['non_compliant_count']}")
-        print(f"    Compliance Rate: {compliance_summary['compliance_percentage']:.1f}%")
-        print(f"    Critical Issues: {compliance_summary['critical_issues']}")
-        print(f"    Overall Status: {compliance_summary['overall_status']}")
-        
-        print("\n" + "=" * 80)
-        print("RA_AGENT DEMONSTRATION COMPLETED SUCCESSFULLY")
-        print("=" * 80)
-        
-        return final_report, feedback_list
-        
-    except Exception as e:
-        logger.error(f"Demo failed: {str(e)}")
-        print(f"\n❌ Demo failed with error: {str(e)}")
-        print("\nThis might be due to:")
-        print("- Ollama server not running")
-        print("- Required models not installed")
-        print("- Network connectivity issues")
-        print("\nPlease check your Ollama setup and try again.")
-        return None, None
-
-
-def demonstrate_conflict_resolution_strategies():
-    """Demonstrate different conflict resolution strategies."""
+        if feedback.get('priority_areas'):
+            print(f"  Priority Areas: {', '.join(feedback['priority_areas'])}")
     
     print("\n" + "=" * 80)
-    print("CONFLICT RESOLUTION STRATEGIES DEMONSTRATION")
+    print("RA_AGENT DEMONSTRATION COMPLETE")
     print("=" * 80)
-    
-    try:
-        llm_client = MultiAgentLLMClient()
-        reports = create_sample_reports()
-        
-        strategies = ["conservative", "liberal", "balanced"]
-        
-        for strategy in strategies:
-            print(f"\n--- Testing {strategy.upper()} Strategy ---")
-            
-            ra_agent = RAAgent(llm_client=llm_client)
-            ra_agent.conflict_resolution_strategy = strategy
-            
-            final_report = ra_agent.assess_reports(reports)
-            
-            print(f"Strategy: {strategy}")
-            print(f"Consolidated Findings: {len(final_report.consolidated_findings)}")
-            print(f"Confidence Score: {final_report.confidence_score:.2f}")
-            
-            # Show how conflicts were resolved
-            auth_finding = next(
-                (f for f in final_report.consolidated_findings if f.requirement_id == "REQ_AUTH_001"),
-                None
-            )
-            
-            if auth_finding:
-                print(f"Auth Requirement Resolution:")
-                print(f"  Status: {auth_finding.compliance_status.value}")
-                print(f"  Severity: {auth_finding.severity.value}")
-                print(f"  Confidence: {auth_finding.confidence_score:.2f}")
-        
-    except Exception as e:
-        print(f"Strategy demonstration failed: {str(e)}")
 
 
 if __name__ == "__main__":
-    # Run the main demonstration
-    final_report, feedback_list = demonstrate_ra_agent()
-    
-    # Run conflict resolution strategies demonstration
-    if final_report is not None:
-        demonstrate_conflict_resolution_strategies()
-    
-    print("\nDemo completed. Check the logs above for detailed results.")
+    try:
+        demonstrate_ra_agent()
+    except Exception as e:
+        logger.error(f"Demo failed: {str(e)}")
+        raise

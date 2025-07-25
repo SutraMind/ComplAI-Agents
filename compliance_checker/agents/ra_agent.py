@@ -81,6 +81,10 @@ class RAAgent(ReportAssessorAgent):
             logger.info(f"RA_Agent {self.agent_id} initialized successfully")
             return True
             
+        except ModelUnavailableError:
+            logger.error(f"Failed to initialize RA_Agent {self.agent_id}: Model {self.model_name} is not available")
+            self.status = "error"
+            raise
         except Exception as e:
             logger.error(f"Failed to initialize RA_Agent {self.agent_id}: {str(e)}")
             self.status = "error"
@@ -98,8 +102,9 @@ class RAAgent(ReportAssessorAgent):
             "feedback_history_count": len(self.feedback_history),
             "conflict_resolution_strategy": self.conflict_resolution_strategy,
             "last_assessment": getattr(self, 'last_assessment_time', None)
-        }    
-def assess_reports(self, reports: List[ComplianceReport]) -> FinalComplianceReport:
+        }
+    
+    def assess_reports(self, reports: List[ComplianceReport]) -> FinalComplianceReport:
         """
         Assess and consolidate multiple compliance reports into a final report.
         
@@ -142,6 +147,9 @@ def assess_reports(self, reports: List[ComplianceReport]) -> FinalComplianceRepo
             # Step 6: Generate consolidation notes
             consolidation_notes = self._generate_consolidation_notes(reports, conflicts, resolved_findings)
             
+            # Calculate processing time (ensure minimum measurable time)
+            processing_time = max(time.time() - start_time, 0.001)
+            
             # Create final report
             final_report = FinalComplianceReport(
                 consolidated_findings=consolidated_findings,
@@ -151,7 +159,7 @@ def assess_reports(self, reports: List[ComplianceReport]) -> FinalComplianceRepo
                 consolidation_notes=consolidation_notes,
                 document_id=reports[0].document_id if reports else None,
                 document_filename=reports[0].document_filename if reports else None,
-                total_processing_time=time.time() - start_time,
+                total_processing_time=processing_time,
                 feedback_iterations=len(self.feedback_history)
             )
             
@@ -239,6 +247,7 @@ def assess_reports(self, reports: List[ComplianceReport]) -> FinalComplianceRepo
         # Simple heuristic: check for contradictory keywords
         contradictory_pairs = [
             ("compliant", "non-compliant"),
+            ("compliant", "fails"),
             ("secure", "insecure"),
             ("adequate", "inadequate"),
             ("sufficient", "insufficient"),
@@ -260,8 +269,8 @@ def assess_reports(self, reports: List[ComplianceReport]) -> FinalComplianceRepo
                     if word2 in reasoning1_lower and word1 in reasoning2_lower:
                         return True
         
-        return False    d
-ef _resolve_conflicts(self, 
+        return False    
+    def _resolve_conflicts(self, 
                           reports: List[ComplianceReport], 
                           conflicts: List[Dict[str, Any]]) -> List[ComplianceFinding]:
         """
@@ -401,8 +410,9 @@ Key principles:
 - Maintain high confidence in your resolutions
 - Always respond with valid JSON format
 
-Your goal is to produce the most accurate and reliable compliance assessment possible.""" 
-   def _parse_conflict_resolution(self, 
+Your goal is to produce the most accurate and reliable compliance assessment possible."""
+    
+    def _parse_conflict_resolution(self, 
                                   conflict: Dict[str, Any], 
                                   cot_response: ChainOfThoughtResponse) -> Optional[ComplianceFinding]:
         """
@@ -563,8 +573,9 @@ Your goal is to produce the most accurate and reliable compliance assessment pos
             ComplianceStatus.NON_COMPLIANT: 3
         }
         
-        return min(findings, key=lambda f: status_priority.get(f.compliance_status, 1)) 
-   def _consolidate_findings(self, 
+        return min(findings, key=lambda f: status_priority.get(f.compliance_status, 1))
+    
+    def _consolidate_findings(self, 
                              reports: List[ComplianceReport], 
                              resolved_findings: List[ComplianceFinding]) -> List[ComplianceFinding]:
         """
@@ -714,8 +725,9 @@ Your goal is to produce the most accurate and reliable compliance assessment pos
         compliance_rate = (compliant / total * 100) if total > 0 else 0
         status += f"Overall compliance rate: {compliance_rate:.1f}% ({compliant}/{total} requirements compliant)."
         
-        return status 
-   def _calculate_final_confidence(self, 
+        return status
+    
+    def _calculate_final_confidence(self, 
                                    reports: List[ComplianceReport], 
                                    consolidated_findings: List[ComplianceFinding]) -> float:
         """
@@ -805,8 +817,9 @@ Your goal is to produce the most accurate and reliable compliance assessment pos
         consolidated_count = len(resolved_findings)
         notes.append(f"Processed {total_findings} total findings, consolidated to {consolidated_count} unique findings")
         
-        return "\n".join(notes)  
-  def generate_feedback(self, reports: List[ComplianceReport]) -> List[Dict[str, Any]]:
+        return "\n".join(notes)
+    
+    def generate_feedback(self, reports: List[ComplianceReport]) -> List[Dict[str, Any]]:
         """
         Generate feedback for CC_Agents based on their reports.
         
@@ -972,8 +985,9 @@ Key principles for feedback:
 - Maintain a supportive and educational tone
 - Always respond with valid JSON format
 
-Your goal is to help CC_Agents become more effective at GDPR compliance analysis through targeted feedback."""    def 
-_parse_feedback_response(self, 
+Your goal is to help CC_Agents become more effective at GDPR compliance analysis through targeted feedback."""
+    
+    def _parse_feedback_response(self, 
                                 target_report: ComplianceReport, 
                                 cot_response: ChainOfThoughtResponse) -> Dict[str, Any]:
         """
