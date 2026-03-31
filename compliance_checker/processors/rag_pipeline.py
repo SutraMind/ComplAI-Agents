@@ -1,5 +1,5 @@
 """
-Modular RAG Pipeline that combines chunking and reranking.
+Modular RAG Pipeline that combines chunking, query expansion, and reranking.
 Allows configurable selection of chunking strategy and optional reranking.
 """
 
@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .chunking import ChunkingStrategy, ChunkingFactory, Chunk
 from .reranking import RerankerStrategy, RerankerFactory, RetrievedDocument
+from .query_expansion import QueryExpansionFactory, QueryExpansionStrategy, ExpandedQuery
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,10 @@ class RAGConfig:
     use_reranking: bool = False
     reranking_strategy: str = "none"  # 'none', 'cross_encoder', 'llm', 'bm25', 'rrf'
     
+    # Query expansion configuration
+    use_query_expansion: bool = False
+    query_expansion_strategy: str = "none"  # 'none', 'synonym', 'llm'
+    
     # Retrieval configuration
     top_k: int = 10
     similarity_threshold: float = 0.0
@@ -44,6 +49,11 @@ class RAGConfig:
         if self.reranking_strategy not in available_reranking:
             raise ValueError(f"Unknown reranking strategy: {self.reranking_strategy}. "
                            f"Available: {available_reranking}")
+        
+        available_expansion = QueryExpansionFactory.get_available_strategies()
+        if self.query_expansion_strategy not in available_expansion:
+            raise ValueError(f"Unknown query expansion strategy: {self.query_expansion_strategy}. "
+                           f"Available: {available_expansion}")
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -55,6 +65,8 @@ class RAGConfig:
             'max_chunk_size': self.max_chunk_size,
             'use_reranking': self.use_reranking,
             'reranking_strategy': self.reranking_strategy,
+            'use_query_expansion': self.use_query_expansion,
+            'query_expansion_strategy': self.query_expansion_strategy,
             'top_k': self.top_k,
             'similarity_threshold': self.similarity_threshold
         }
@@ -105,20 +117,25 @@ class ModularRAGPipeline:
         # Initialize reranking strategy
         self.reranker = self._init_reranking_strategy()
         
+        # Initialize query expansion strategy
+        self.query_expander = self._init_query_expansion_strategy()
+        
         # Store chunks
         self.document_chunks: List[Chunk] = []
         self.chunk_embeddings: Optional[np.ndarray] = None
         
         # Stats
-        self.stats = {
+        self.stats: Dict[str, Any] = {
             'total_documents': 0,
             'total_chunks': 0,
             'retrieval_calls': 0,
-            'reranking_applied': 0
+            'reranking_applied': 0,
+            'query_expansion_applied': 0
         }
         
         logger.info(f"Initialized ModularRAGPipeline with chunking={self.config.chunking_strategy}, "
-                   f"reranking={'enabled' if self.config.use_reranking else 'disabled'}")
+                   f"reranking={'enabled' if self.config.use_reranking else 'disabled'}, "
+                   f"query_expansion={'enabled' if self.config.use_query_expansion else 'disabled'}")
     
     def _init_chunking_strategy(self) -> ChunkingStrategy:
         """Initialize the chunking strategy."""
@@ -151,6 +168,21 @@ class ModularRAGPipeline:
             self.config.reranking_strategy,
             llm_client=self.llm_client,
             **reranking_kwargs
+        )
+    
+    def _init_query_expansion_strategy(self) -> QueryExpansionStrategy:
+        """Initialize the query expansion strategy."""
+        if not self.config.use_query_expansion:
+            return QueryExpansionFactory.create('none')
+        
+        expansion_kwargs = {}
+        if self.config.query_expansion_strategy == 'llm':
+            expansion_kwargs['llm_client'] = self.llm_client
+        
+        return QueryExpansionFactory.create(
+            self.config.query_expansion_strategy,
+            llm_client=self.llm_client,
+            **expansion_kwargs
         )
     
     def ingest_document(self, 
@@ -234,7 +266,8 @@ class ModularRAGPipeline:
     def retrieve(self, 
                  query: str, 
                  top_k: Optional[int] = None,
-                 use_reranking: Optional[bool] = None) -> List[RetrievedDocument]:
+                 use_reranking: Optional[bool] = None,
+                 use_query_expansion: Optional[bool] = None) -> List[RetrievedDocument]:
         """
         Retrieve relevant documents for a query.
         
@@ -242,14 +275,24 @@ class ModularRAGPipeline:
             query: The search query
             top_k: Number of results to return (uses config if not provided)
             use_reranking: Override reranking setting
+            use_query_expansion: Override query expansion setting
             
         Returns:
             List of retrieved documents with scores
         """
         top_k = top_k or self.config.top_k
         use_reranking = use_reranking if use_reranking is not None else self.config.use_reranking
+        use_query_expansion = use_query_expansion if use_query_expansion is not None else self.config.use_query_expansion
         
         self.stats['retrieval_calls'] += 1
+        
+        # Apply query expansion if enabled
+        expanded_query = query
+        if use_query_expansion and self.query_expander:
+            expanded = self.query_expander.expand(query)
+            expanded_query = expanded.final_query
+            self.stats['query_expansion_applied'] += 1
+            logger.info(f"Query expanded: '{query}' -> '{expanded_query}'")
         
         if not self.document_chunks:
             logger.warning("No documents indexed")
@@ -257,7 +300,7 @@ class ModularRAGPipeline:
         
         # Get query embedding
         if self.embedding_model:
-            query_embedding = self.embedding_model.encode([query])
+            query_embedding = self.embedding_model.encode([expanded_query])
             query_embedding = query_embedding / np.linalg.norm(query_embedding)
             query_embedding = query_embedding.astype('float32')
             
@@ -272,7 +315,7 @@ class ModularRAGPipeline:
         else:
             # Use knowledge base if available
             if self.knowledge_base:
-                return self._retrieve_from_kb(query, top_k, use_reranking)
+                return self._retrieve_from_kb(expanded_query, top_k, use_reranking)
             else:
                 logger.error("No embedding model or knowledge base available")
                 return []
