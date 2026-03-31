@@ -2,7 +2,7 @@
 Document and data processing components.
 
 Contains document parsers, chain-of-thought processors, chunking strategies,
-reranking modules, and the modular RAG pipeline.
+reranking modules, query expansion, and the modular RAG pipeline.
 """
 
 from .base import (
@@ -35,6 +35,17 @@ from .reranking import (
     BM25Reranker,
     ReciprocalRankReranker,
     HybridReranker
+)
+
+# Query Expansion
+from .query_expansion import (
+    QueryExpansionStrategy,
+    QueryExpansionFactory,
+    ExpandedQuery,
+    NoExpansionStrategy,
+    SynonymExpansionStrategy,
+    LLMExpansionStrategy,
+    HybridExpansionStrategy
 )
 
 # RAG Pipeline
@@ -72,6 +83,15 @@ __all__ = [
     'BM25Reranker',
     'ReciprocalRankReranker',
     'HybridReranker',
+    
+    # Query Expansion
+    'QueryExpansionStrategy',
+    'QueryExpansionFactory',
+    'ExpandedQuery',
+    'NoExpansionStrategy',
+    'SynonymExpansionStrategy',
+    'LLMExpansionStrategy',
+    'HybridExpansionStrategy',
     
     # RAG Pipeline
     'ModularRAGPipeline',

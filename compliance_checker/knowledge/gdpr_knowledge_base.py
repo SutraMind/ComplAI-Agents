@@ -25,7 +25,7 @@ except ImportError:
 from ..models.gdpr import GDPRArticle, GDPRRecital, GDPRKnowledgeEntry
 from ..exceptions import VectorStoreError, DocumentProcessingError
 
-# Import new chunking module
+# Import new modules
 try:
     from ..processors.chunking import ChunkingFactory, Chunk
     from ..processors.reranking import RerankerFactory, RetrievedDocument
@@ -69,7 +69,7 @@ class GDPRKnowledgeBase:
         self.index_path = Path(index_path)
         self.embedding_model_name = embedding_model
         
-        # Chunking and reranking configuration
+        # Chunking and reranking configuration (NO query expansion in KB)
         self.chunking_strategy = chunking_strategy
         self.use_reranking = use_reranking
         self.reranking_strategy = reranking_strategy
@@ -674,7 +674,7 @@ class GDPRKnowledgeBase:
         Returns:
             Dictionary with knowledge base statistics
         """
-        stats = {
+        stats: Dict[str, Any] = {
             'total_entries': len(self.knowledge_entries),
             'total_articles': len(self.articles),
             'total_recitals': len(self.recitals),
